@@ -17,3 +17,6 @@ out/
 .env
 .env.*
 !.env.example
+
+# Prototype outputs (reports, thumbnails, test databases)
+probe-output/
