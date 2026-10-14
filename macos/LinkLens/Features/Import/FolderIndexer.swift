@@ -21,6 +21,8 @@ enum IndexingResult: Sendable, Equatable {
 struct FolderIndexer: Sendable {
     let store: LibraryStore
     var batchSize = 200
+    /// F2 indexes photos only; the folder of a card import (F1) also has videos.
+    var includeVideos = false
 
     /// `@concurrent` runs this function on a background thread even when called from the interface,
     /// so scanning and reading metadata never freeze the window.
@@ -43,7 +45,7 @@ struct FolderIndexer: Sendable {
             return .alreadyIndexed(galleryId: existing)
         }
 
-        let files = try PhotoScanner.scan(folder: folder)
+        let files = try PhotoScanner.scan(folder: folder, includeVideos: includeVideos)
         guard !files.isEmpty else {
             throw LibraryError.noPhotos(folder.lastPathComponent)
         }
@@ -59,8 +61,13 @@ struct FolderIndexer: Sendable {
             for start in stride(from: 0, to: files.count, by: batchSize) {
                 try Task.checkCancellation()
                 let importedAt = Date()
-                let drafts = files[start..<min(start + batchSize, files.count)].map { file in
-                    PhotoDraft(file: file, metadata: PhotoMetadataReader.read(url: file.url), importedAt: importedAt)
+                var drafts: [PhotoDraft] = []
+                for file in files[start..<min(start + batchSize, files.count)] {
+                    let metadata = switch file.kind {
+                    case .video: await VideoReader.metadata(url: file.url)
+                    case .photo, .unknown: PhotoMetadataReader.read(url: file.url)
+                    }
+                    drafts.append(PhotoDraft(file: file, metadata: metadata, importedAt: importedAt))
                 }
                 try await store.insert(drafts, galleryId: galleryId)
                 completed += drafts.count

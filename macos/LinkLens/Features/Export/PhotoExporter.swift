@@ -1,22 +1,6 @@
 import CoreImage
 import Foundation
 
-/// Kind of file to export, from its extension.
-///
-/// Only photos are indexed for now. Videos arrive with F1 (SD card): `exportVideo` will then
-/// convert them with AVFoundation (H.264 or HEVC) next to the photos, without changing this API.
-enum MediaKind: Sendable, Equatable {
-    case photo
-    case video
-
-    static let videoExtensions: Set<String> = ["mov", "mp4", "m4v", "mts"]
-
-    init(relativePath: String) {
-        let fileExtension = (relativePath as NSString).pathExtension.lowercased()
-        self = Self.videoExtensions.contains(fileExtension) ? .video : .photo
-    }
-}
-
 /// One file to export, as a `Sendable` copy of the `Photo` (see `PhotoReference`).
 struct ExportItem: Sendable, Equatable {
     var photoId: UUID
@@ -199,8 +183,8 @@ struct PhotoExporter: Sendable {
     ) throws -> URL {
         let source = folder.appending(path: job.item.relativePath)
         switch job.item.kind {
-        case .photo:
-            break
+        case .photo, .unknown:
+            break // an unknown file is tried as a photo: the conversion error says what went wrong
         case .video:
             // Comes with F1: AVAssetExportSession, H.264 or HEVC.
             throw ExportError.videoNotSupportedYet(source.lastPathComponent)

@@ -102,7 +102,7 @@ private struct ThumbnailCell: View {
                         .resizable()
                         .scaledToFit()
                 } else {
-                    Image(systemName: "photo")
+                    Image(systemName: photo.mediaKind == .video ? "video" : "photo")
                         .font(.title2)
                         .foregroundStyle(.tertiary)
                 }
@@ -125,6 +125,17 @@ private struct ThumbnailCell: View {
             .overlay(alignment: .topLeading) {
                 if photo.isBestOfBurst {
                     BestOfBurstStar().padding(5)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if photo.mediaKind == .video {
+                    Image(systemName: "video.fill")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 4))
+                        .padding(5)
+                        .accessibilityHidden(true)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -150,7 +161,7 @@ private struct ThumbnailCell: View {
         // Tooltip on hover: the verdict and every reason.
         .help(([photo.cullingVerdict?.label].compactMap { $0 } + messages).joined(separator: "\n"))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: ([photo.relativePath, photo.cullingVerdict?.label, burst?.accessibilityDescription, messages.first]
+        .accessibilityLabel(Text(verbatim: ([photo.relativePath, photo.mediaKind == .video ? String(localized: "Vidéo") : nil, photo.cullingVerdict?.label, burst?.accessibilityDescription, messages.first]
                 .compactMap { $0 })
                 .joined(separator: ", ")))
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)

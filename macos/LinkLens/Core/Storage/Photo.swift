@@ -1,7 +1,8 @@
 import Foundation
 import SwiftData
 
-/// A photo file of a gallery. Only its location, metadata and analysis results are stored: the file never moves.
+/// A photo (or, since F1, a video) file of a gallery. Only its location, metadata and analysis results
+/// are stored: the file never moves.
 @Model
 final class Photo {
     #Index<Photo>([\.captureDate])
@@ -16,6 +17,8 @@ final class Photo {
     var pixelWidth: Int
     var pixelHeight: Int
     var importedAt: Date
+    /// Raw value of `MediaKind`. Nil for the photos indexed before F1 (they are all photos).
+    var mediaKindRaw: String?
 
     // F3 culling. Optional or with a default value, so SwiftData migrates older catalogues by itself.
     /// Raw value of `CullingVerdict` (a plain string can be filtered and sorted in a `#Predicate`).
@@ -39,12 +42,15 @@ final class Photo {
         pixelWidth = draft.pixelWidth
         pixelHeight = draft.pixelHeight
         importedAt = draft.importedAt
+        mediaKindRaw = draft.mediaKind.rawValue
     }
 }
 
 // A computed property (`var x: T { … }`) has no storage: it is recomputed on each read,
 // like a getter in a TypeScript class. SwiftData does not persist it.
 extension Photo {
+    var mediaKind: MediaKind { MediaKind(stored: mediaKindRaw) }
+
     /// Nil while the photo has not been analysed.
     var cullingVerdict: CullingVerdict? {
         cullingVerdictRaw.map { CullingVerdict(rawValue: $0) ?? .unknown }
@@ -83,9 +89,11 @@ struct PhotoDraft: Sendable, Equatable {
     var pixelWidth: Int
     var pixelHeight: Int
     var importedAt: Date
+    var mediaKind: MediaKind
 
     init(file: PhotoFile, metadata: PhotoMetadata, importedAt: Date) {
         relativePath = file.relativePath
+        mediaKind = file.kind
         fileSize = file.fileSize
         captureDate = metadata.captureDate
         pixelWidth = metadata.pixelWidth

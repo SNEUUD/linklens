@@ -239,7 +239,11 @@ final class ThumbnailLoader {
         if let cached = cache.image(for: request.photoId) { return cached }
         guard let folder else { return nil }
         do {
-            let image = try ThumbnailGenerator.makeThumbnail(from: folder.appending(path: request.relativePath))
+            let url = folder.appending(path: request.relativePath)
+            let image = switch MediaKind(relativePath: request.relativePath) {
+            case .video: try await VideoReader.frame(url: url, maxPixelSize: ThumbnailGenerator.maxPixelSize)
+            case .photo, .unknown: try ThumbnailGenerator.makeThumbnail(from: url)
+            }
             try cache.store(image, for: request.photoId)
             return image
         } catch {
@@ -250,6 +254,9 @@ final class ThumbnailLoader {
 
     @concurrent
     private nonisolated static func loadPreview(_ url: URL) async -> CGImage? {
-        try? PreviewLoader.load(url: url)
+        switch MediaKind(relativePath: url.lastPathComponent) {
+        case .video: try? await VideoReader.frame(url: url, maxPixelSize: 2048)
+        case .photo, .unknown: try? PreviewLoader.load(url: url)
+        }
     }
 }

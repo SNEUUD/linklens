@@ -6,6 +6,8 @@ struct ContentView: View {
     // `@Environment` reads an object provided higher in the tree (like `useContext` in React).
     @Environment(ImportController.self) private var importController
     @Environment(CullingController.self) private var cullingController
+    @Environment(CardImportController.self) private var cardImportController
+    @Environment(CardMonitor.self) private var cardMonitor
     @Query(sort: \Gallery.createdAt, order: .reverse) private var galleries: [Gallery]
 
     var body: some View {
@@ -19,6 +21,20 @@ struct ContentView: View {
                 progress: importController.progress,
                 onCancel: importController.cancelIndexing
             )
+            // `safeAreaInset` pins a view under the list without covering its last rows.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    ForEach(cardMonitor.cards) { card in
+                        DetectedCardBanner(card: card) {
+                            if cardImportController.importCard(card) {
+                                cardMonitor.dismiss(card)
+                            }
+                        } onDismiss: {
+                            cardMonitor.dismiss(card)
+                        }
+                    }
+                }
+            }
         } detail: {
             // `Group` wraps the branches so one modifier (the alert) applies to all of them.
             Group {
@@ -31,6 +47,8 @@ struct ContentView: View {
                     } description: {
                         Text("Importez une carte SD ou un dossier de photos pour commencer.")
                     } actions: {
+                        Button("Importer une carte…", action: cardImportController.chooseCard)
+                            .disabled(cardImportController.isSheetPresented)
                         Button("Ajouter un dossier…", action: importController.chooseFolder)
                             .disabled(importController.isIndexing)
                     }
@@ -52,10 +70,33 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
+                Button("Importer une carte…", systemImage: "sdcard", action: cardImportController.chooseCard)
+                    .disabled(cardImportController.isSheetPresented)
+                    .help("Copier les photos et vidéos d'une carte SD dans une nouvelle galerie")
+            }
+            ToolbarItem(placement: .navigation) {
                 Button("Ajouter un dossier…", systemImage: "folder.badge.plus", action: importController.chooseFolder)
                     .disabled(importController.isIndexing)
                     .help("Indexer un dossier de photos sans le copier")
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { cardImportController.isSheetPresented },
+            set: { if !$0 { cardImportController.close() } }
+        )) {
+            CardImportSheet()
+                .environment(cardImportController)
+        }
+        .alert(
+            "Import impossible",
+            isPresented: Binding(
+                get: { cardImportController.errorMessage != nil },
+                set: { if !$0 { cardImportController.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(cardImportController.errorMessage ?? "")
         }
         .alert(
             "Indexation impossible",
@@ -83,6 +124,8 @@ struct ContentView: View {
         .environment(ImportController(store: store))
         .environment(CullingController(store: store))
         .environment(ExportController())
+        .environment(CardImportController(importer: CardImporter(store: store)))
+        .environment(CardMonitor())
         .modelContainer(container)
 }
 

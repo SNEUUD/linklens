@@ -45,6 +45,10 @@ private struct GalleryRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            } else if gallery.videoCount > 0 {
+                Text("^[\(gallery.photoCount - gallery.videoCount) photo](inflect: true) · ^[\(gallery.videoCount) vidéo](inflect: true)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("^[\(gallery.photoCount) photo](inflect: true)")
                     .font(.caption)

@@ -18,6 +18,11 @@ enum FolderBookmark {
         )
     }
 
+    /// Read-write: for the location where card imports (F1) create their folders. Never used for a gallery.
+    static func createReadWrite(for url: URL) throws -> Data {
+        try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+    }
+
     /// Returns the folder URL. A stale bookmark (folder moved or renamed) is handled with F9.
     static func resolve(_ bookmark: Data) throws -> URL {
         var isStale = false

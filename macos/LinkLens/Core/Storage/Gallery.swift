@@ -14,8 +14,10 @@ final class Gallery {
     var folderPath: String
     /// Security-scoped bookmark: lets the sandboxed app reopen the folder after a restart.
     var folderBookmark: Data
-    /// Photos stored so far, updated batch by batch (cheaper to display than `photos.count`).
+    /// Photos and videos stored so far, updated batch by batch (cheaper to display than `photos.count`).
     var photoCount: Int
+    /// How many of `photoCount` are videos (F1). A default value lets SwiftData migrate older catalogues.
+    var videoCount = 0
     /// `nil` while indexing runs, set once every photo is stored.
     var indexedAt: Date?
     /// Last time the AI sorting (F3) finished for the whole gallery; nil if never sorted.

@@ -33,6 +33,7 @@ actor LibraryStore {
             photo.gallery = gallery
         }
         gallery.photoCount += drafts.count
+        gallery.videoCount += drafts.filter { $0.mediaKind == .video }.count
         try modelContext.save()
     }
 
@@ -60,9 +61,11 @@ actor LibraryStore {
     // MARK: - Culling (F3)
 
     /// What the analysis needs: the folder bookmark and the photos (as `Sendable` copies).
+    /// Videos are left out: the AI sorting only judges photos.
     func cullingContents(galleryId: UUID) throws -> GalleryContents {
         let gallery = try fetchGallery(id: galleryId)
         let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { $0.gallery?.id == galleryId }))
+            .filter { $0.mediaKind == .photo }
         return GalleryContents(
             name: gallery.name,
             folderPath: gallery.folderPath,

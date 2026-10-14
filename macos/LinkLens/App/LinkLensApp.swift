@@ -9,6 +9,8 @@ struct LinkLensApp: App {
     @State private var importController: ImportController
     @State private var cullingController: CullingController
     @State private var exportController = ExportController()
+    @State private var cardImportController: CardImportController
+    @State private var cardMonitor: CardMonitor
 
     init() {
         do {
@@ -19,13 +21,23 @@ struct LinkLensApp: App {
         let store = LibraryStore(modelContainer: container)
         let culling = CullingController(store: store)
         _cullingController = State(initialValue: culling)
-        _importController = State(initialValue: ImportController(store: store) { galleryId in
+        let folderImport = ImportController(store: store) { galleryId in
+            culling.cull(galleryId: galleryId)
+        }
+        _importController = State(initialValue: folderImport)
+        // `_name = State(initialValue:)` sets a `@State` property from `init`, before the view exists.
+        _cardImportController = State(initialValue: CardImportController(importer: CardImporter(store: store)) { galleryId in
+            folderImport.selectedGalleryId = galleryId
             culling.cull(galleryId: galleryId)
         })
-        // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch.
-        // Not while the unit tests run inside the app: they must not touch the real catalogue.
+        let monitor = CardMonitor()
+        _cardMonitor = State(initialValue: monitor)
+        // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch, and
+        // inserted cards are watched. Not while the unit tests run inside the app: they must not touch
+        // the real catalogue.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             culling.cullPendingGalleries()
+            monitor.start()
         }
     }
 
@@ -35,12 +47,17 @@ struct LinkLensApp: App {
                 .environment(importController)
                 .environment(cullingController)
                 .environment(exportController)
+                .environment(cardImportController)
+                .environment(cardMonitor)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)
         .modelContainer(container)
         .commands {
             CommandGroup(after: .newItem) {
+                Button("Importer une carte…", action: cardImportController.chooseCard)
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+                    .disabled(cardImportController.isSheetPresented)
                 Button("Ajouter un dossier…", action: importController.chooseFolder)
                     .keyboardShortcut("o")
                     .disabled(importController.isIndexing)
