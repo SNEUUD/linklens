@@ -34,6 +34,8 @@ struct LinkLensApp: App {
                 .environment(importController)
                 .environment(cullingController)
         }
+        // Wide enough at first launch for every column of the photo table without scrolling sideways.
+        .defaultSize(width: 1280, height: 760)
         .modelContainer(container)
         .commands {
             CommandGroup(after: .newItem) {

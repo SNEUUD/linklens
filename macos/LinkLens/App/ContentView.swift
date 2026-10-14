@@ -68,7 +68,8 @@ struct ContentView: View {
         } message: {
             Text(importController.errorMessage ?? "")
         }
-        .frame(minWidth: 800, minHeight: 500)
+        // Sidebar + every table column at its minimum width (see `GalleryDetailView`).
+        .frame(minWidth: 1080, minHeight: 560)
     }
 }
 

@@ -22,30 +22,42 @@ struct GalleryDetailView: View {
 
     var body: some View {
         Table(photos) {
-            TableColumn("Fichier", value: \.relativePath)
+            // The table resizes every column together: the others are capped (`max`) so that
+            // "Raison" takes the remaining space. The window minimum width is the sum of the `min`s.
+            TableColumn("Fichier") { photo in
+                Text(verbatim: photo.relativePath)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(photo.relativePath)
+            }
+            .width(min: 115, ideal: 120, max: 160)
             TableColumn("Tri") { photo in
                 VerdictBadge(verdict: photo.cullingVerdict)
             }
-            .width(min: 90, ideal: 100)
+            .width(min: 80, ideal: 85, max: 100)
             TableColumn("Raison") { photo in
                 ReasonCell(photo: photo)
             }
-            .width(min: 200, ideal: 340)
+            .width(min: 220, ideal: 420)
             TableColumn("Prise de vue") { photo in
                 if let captureDate = photo.captureDate {
-                    Text(captureDate, format: .dateTime.day().month().year().hour().minute().second())
+                    // Numeric date ("21/09/2026 17:24:57"): short enough to keep every column visible.
+                    Text(captureDate, format: .dateTime.day().month(.twoDigits).year().hour().minute().second())
                 } else {
                     Text(verbatim: "—")
                 }
             }
+            .width(min: 140, ideal: 145, max: 150)
             TableColumn("Dimensions") { photo in
                 Text(verbatim: photo.pixelWidth > 0 ? "\(photo.pixelWidth) × \(photo.pixelHeight)" : "—")
                     .monospacedDigit()
             }
+            .width(min: 85, ideal: 90, max: 100)
             TableColumn("Taille") { photo in
                 Text(photo.fileSize, format: .byteCount(style: .file))
                     .monospacedDigit()
             }
+            .width(min: 60, ideal: 65, max: 75)
         }
         // `safeAreaInset` pins a bar above the table, which scrolls under it.
         .safeAreaInset(edge: .top, spacing: 0) {
