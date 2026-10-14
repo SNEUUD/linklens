@@ -8,6 +8,7 @@ struct LinkLensApp: App {
     private let container: ModelContainer
     @State private var importController: ImportController
     @State private var cullingController: CullingController
+    @State private var exportController = ExportController()
 
     init() {
         do {
@@ -33,6 +34,7 @@ struct LinkLensApp: App {
             ContentView()
                 .environment(importController)
                 .environment(cullingController)
+                .environment(exportController)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)

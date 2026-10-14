@@ -82,6 +82,7 @@ struct ContentView: View {
     ContentView()
         .environment(ImportController(store: store))
         .environment(CullingController(store: store))
+        .environment(ExportController())
         .modelContainer(container)
 }
 

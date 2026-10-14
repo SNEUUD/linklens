@@ -21,11 +21,12 @@ extension Photo {
     }
 }
 
-/// The photos of a gallery, as a grid of thumbnails or a table, a large viewer, the AI sorting (F3)
-/// and the bursts shown as stacks (F4).
+/// The photos of a gallery, as a grid of thumbnails or a table, a large viewer, the AI sorting (F3),
+/// the bursts shown as stacks (F4) and the export (F6).
 struct GalleryDetailView: View {
     let gallery: Gallery
     @Environment(CullingController.self) private var cullingController
+    @Environment(ExportController.self) private var exportController
     @Query private var photos: [Photo]
     // `@AppStorage` is a `@State` saved in the user defaults (like `useState` backed by `localStorage`).
     @AppStorage("galleryLayout") private var layout = GalleryLayout.grid
@@ -33,6 +34,7 @@ struct GalleryDetailView: View {
     // `@State` keeps the same loader for the whole life of the view (like `useRef`), one per gallery.
     @State private var loader = ThumbnailLoader()
     @State private var revealError: String?
+    @State private var isExportSheetPresented = false
 
     init(gallery: Gallery) {
         self.gallery = gallery
@@ -51,6 +53,9 @@ struct GalleryDetailView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             CullingStatusBar(gallery: gallery, photos: photos)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ExportStatusBar(galleryId: gallery.id)
+        }
         .navigationTitle(gallery.name)
         .navigationSubtitle(gallery.folderPath)
         .toolbar {
@@ -68,7 +73,17 @@ struct GalleryDetailView: View {
             }
             .disabled(cullingController.isBusy(galleryId: gallery.id))
             .help("Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
+            Button("Exporter…", systemImage: "square.and.arrow.up") {
+                isExportSheetPresented = true
+            }
+            .keyboardShortcut("e")
+            .disabled(photos.isEmpty || exportController.isExporting)
+            .help("Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés.")
             Button("Afficher dans le Finder", systemImage: "folder", action: revealInFinder)
+        }
+        // `.sheet` shows a modal attached to the window while the Boolean is true (like `<Modal open={…}>`).
+        .sheet(isPresented: $isExportSheetPresented) {
+            ExportSheet(gallery: gallery, photos: photos, selectedPhotoId: browser.selection)
         }
         // Opens the folder (read only) and queues the missing thumbnails; again when photos are added.
         .task(id: photos.count) {
@@ -87,6 +102,17 @@ struct GalleryDetailView: View {
             Button("OK") {}
         } message: {
             Text(revealError ?? "")
+        }
+        .alert(
+            "Export impossible",
+            isPresented: Binding(
+                get: { exportController.errorMessage != nil },
+                set: { if !$0 { exportController.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(exportController.errorMessage ?? "")
         }
     }
 
