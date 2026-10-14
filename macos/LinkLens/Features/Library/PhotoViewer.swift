@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// Large view of the selected photo, with the AI verdict and all its reasons.
-/// ← → go to the previous / next photo; space or Escape go back.
+/// ← → go to the previous / next shown photo (a collapsed burst counts as one); S opens or closes
+/// the burst; space or Escape go back.
 struct PhotoViewer: View {
-    let photos: [Photo]
-    /// Index of the photo shown in `photos`.
+    let rows: [DisplayedPhoto]
+    /// Index of the photo shown in `rows`.
     let index: Int
     let loader: ThumbnailLoader
     let browser: GalleryBrowser
@@ -19,11 +20,11 @@ struct PhotoViewer: View {
     }
 
     var body: some View {
-        let photo = photos[index]
+        let photo = rows[index].photo
         VStack(spacing: 0) {
             imageArea(for: photo)
             Divider()
-            PhotoInfoPanel(photo: photo, position: index + 1, total: photos.count)
+            PhotoInfoPanel(photo: photo, burst: rows[index].entry.burst, position: index + 1, total: rows.count)
         }
         .focusable(interactions: .edit)
         .focused($isFocused)
@@ -42,6 +43,9 @@ struct PhotoViewer: View {
         .onKeyPress(keys: [.space, .escape]) { _ in
             browser.closeViewer()
             return .handled
+        }
+        .onKeyPress(characters: CharacterSet(charactersIn: "sS"), phases: .down) { _ in
+            browser.toggleSelectedBurst() ? .handled : .ignored
         }
         .task(id: photo.id) { await load(photo) }
     }
@@ -72,7 +76,7 @@ struct PhotoViewer: View {
             }
         }
         .overlay(alignment: .trailing) {
-            arrowButton("Photo suivante", systemImage: "chevron.right.circle.fill", disabled: index == photos.count - 1) {
+            arrowButton("Photo suivante", systemImage: "chevron.right.circle.fill", disabled: index == rows.count - 1) {
                 browser.showNeighbour(offset: 1)
             }
         }
@@ -100,16 +104,17 @@ struct PhotoViewer: View {
             preview = LoadedImage(photoId: photo.id, image: image)
         }
         // Reads the neighbours ahead, so the next arrow key shows the full image at once.
-        for neighbour in [index + 1, index - 1] where photos.indices.contains(neighbour) {
+        for neighbour in [index + 1, index - 1] where rows.indices.contains(neighbour) {
             guard !Task.isCancelled else { return }
-            _ = await loader.preview(for: photos[neighbour].thumbnailRequest)
+            _ = await loader.preview(for: rows[neighbour].photo.thumbnailRequest)
         }
     }
 }
 
-/// Under the image: file, date, position, verdict with the star, and every reason.
+/// Under the image: file, date, position, burst, verdict with the star, and every reason.
 private struct PhotoInfoPanel: View {
     let photo: Photo
+    let burst: BurstPlacement?
     let position: Int
     let total: Int
 
@@ -126,6 +131,13 @@ private struct PhotoInfoPanel: View {
                 Text("Photo \(position) sur \(total)")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                if let burst {
+                    Text(burst.isExpanded
+                        ? "Rafale \(burst.number) · \(burst.count) photos (S pour replier)"
+                        : "Rafale \(burst.number) · \(burst.count) photos (S pour toutes les voir)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
             .frame(minWidth: 200, alignment: .leading)
 

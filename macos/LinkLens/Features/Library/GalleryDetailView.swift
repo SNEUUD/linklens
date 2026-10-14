@@ -7,7 +7,22 @@ enum GalleryLayout: String {
     case grid, table
 }
 
-/// The photos of a gallery, as a grid of thumbnails or a table, a large viewer, and the AI sorting (F3).
+/// A shown entry with its photo: what the grid, the table and the viewer draw.
+struct DisplayedPhoto: Identifiable {
+    let entry: GalleryEntry
+    let photo: Photo
+
+    var id: UUID { photo.id }
+}
+
+extension Photo {
+    var burstInput: BurstStacks.Input {
+        BurstStacks.Input(id: id, burstNumber: burstNumber, isBestOfBurst: isBestOfBurst)
+    }
+}
+
+/// The photos of a gallery, as a grid of thumbnails or a table, a large viewer, the AI sorting (F3)
+/// and the bursts shown as stacks (F4).
 struct GalleryDetailView: View {
     let gallery: Gallery
     @Environment(CullingController.self) private var cullingController
@@ -61,7 +76,9 @@ struct GalleryDetailView: View {
             await loader.prefetch(photos.map(\.thumbnailRequest))
         }
         .onDisappear { loader.stop() }
-        .onChange(of: photos.map(\.id), initial: true) { _, photoIds in browser.photoIds = photoIds }
+        // Again after a sorting: the bursts are stored on the photos.
+        .onChange(of: photos.map(\.burstInput), initial: true) { _, inputs in browser.setPhotos(inputs) }
+        .onChange(of: gallery.culledAt) { browser.collapseAllBursts() }
         .onChange(of: layout) { browser.closeViewer() }
         .alert(
             "Dossier inaccessible",
@@ -76,15 +93,27 @@ struct GalleryDetailView: View {
     /// The viewer when it is open, otherwise the grid or the table.
     // `@ViewBuilder` lets a property return different views from an `if` / `switch`, like a JSX ternary.
     @ViewBuilder private var content: some View {
-        if browser.isViewerOpen, let index = browser.selectedIndex, photos.indices.contains(index) {
-            PhotoViewer(photos: photos, index: index, loader: loader, browser: browser)
+        let rows = rows
+        if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
+            PhotoViewer(rows: rows, index: index, loader: loader, browser: browser)
         } else {
             switch layout {
             case .grid:
-                GalleryGridView(photos: photos, loader: loader, browser: browser)
+                GalleryGridView(rows: rows, loader: loader, browser: browser)
             case .table:
-                GalleryTableView(photos: photos, browser: browser)
+                GalleryTableView(rows: rows, browser: browser)
             }
+        }
+    }
+
+    /// The browser's entries with their photos. Right after a save, `photos` can be newer than the
+    /// entries for one update: a photo is then looked up by its id instead of its index.
+    private var rows: [DisplayedPhoto] {
+        browser.entries.compactMap { entry in
+            let photo = photos.indices.contains(entry.photoIndex) && photos[entry.photoIndex].id == entry.photoId
+                ? photos[entry.photoIndex]
+                : photos.first { $0.id == entry.photoId }
+            return photo.map { DisplayedPhoto(entry: entry, photo: $0) }
         }
     }
 
@@ -134,6 +163,12 @@ private struct CullingStatusBar: View {
                 count(of: .keep)
                 count(of: .review)
                 count(of: .reject)
+                let burstCount = Set(photos.compactMap(\.burstNumber)).count
+                if burstCount > 0 {
+                    Label("Rafales : \(burstCount)", systemImage: "square.stack")
+                        .monospacedDigit()
+                        .help("Chaque rafale est montrée par sa meilleure photo. Touche S : voir toute la rafale ou la replier.")
+                }
                 Spacer()
                 Text("Proposition de l'IA : rien n'est supprimé.")
                     .foregroundStyle(.secondary)

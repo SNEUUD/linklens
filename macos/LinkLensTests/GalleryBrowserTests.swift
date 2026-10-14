@@ -7,7 +7,7 @@ import Testing
 struct GalleryBrowserTests {
     private func browser(photoCount: Int, columns: Int = 4) -> GalleryBrowser {
         let browser = GalleryBrowser()
-        browser.photoIds = (0..<photoCount).map { _ in UUID() }
+        browser.setPhotos((0..<photoCount).map { _ in BurstStacks.Input(id: UUID()) })
         browser.columnCount = columns
         return browser
     }
