@@ -2,11 +2,21 @@ import AppKit
 import SwiftData
 import SwiftUI
 
-/// The photos of a gallery, as a simple table (thumbnails come later), with the AI sorting (F3).
+/// How a gallery is shown. A `String` raw value lets `@AppStorage` save it.
+enum GalleryLayout: String {
+    case grid, table
+}
+
+/// The photos of a gallery, as a grid of thumbnails or a table, a large viewer, and the AI sorting (F3).
 struct GalleryDetailView: View {
     let gallery: Gallery
     @Environment(CullingController.self) private var cullingController
     @Query private var photos: [Photo]
+    // `@AppStorage` is a `@State` saved in the user defaults (like `useState` backed by `localStorage`).
+    @AppStorage("galleryLayout") private var layout = GalleryLayout.grid
+    @State private var browser = GalleryBrowser()
+    // `@State` keeps the same loader for the whole life of the view (like `useRef`), one per gallery.
+    @State private var loader = ThumbnailLoader()
     @State private var revealError: String?
 
     init(gallery: Gallery) {
@@ -21,51 +31,20 @@ struct GalleryDetailView: View {
     }
 
     var body: some View {
-        Table(photos) {
-            // The table resizes every column together: the others are capped (`max`) so that
-            // "Raison" takes the remaining space. The window minimum width is the sum of the `min`s.
-            TableColumn("Fichier") { photo in
-                Text(verbatim: photo.relativePath)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(photo.relativePath)
-            }
-            .width(min: 115, ideal: 120, max: 160)
-            TableColumn("Tri") { photo in
-                VerdictBadge(verdict: photo.cullingVerdict)
-            }
-            .width(min: 80, ideal: 85, max: 100)
-            TableColumn("Raison") { photo in
-                ReasonCell(photo: photo)
-            }
-            .width(min: 220, ideal: 420)
-            TableColumn("Prise de vue") { photo in
-                if let captureDate = photo.captureDate {
-                    // Numeric date ("21/09/2026 17:24:57"): short enough to keep every column visible.
-                    Text(captureDate, format: .dateTime.day().month(.twoDigits).year().hour().minute().second())
-                } else {
-                    Text(verbatim: "—")
-                }
-            }
-            .width(min: 140, ideal: 145, max: 150)
-            TableColumn("Dimensions") { photo in
-                Text(verbatim: photo.pixelWidth > 0 ? "\(photo.pixelWidth) × \(photo.pixelHeight)" : "—")
-                    .monospacedDigit()
-            }
-            .width(min: 85, ideal: 90, max: 100)
-            TableColumn("Taille") { photo in
-                Text(photo.fileSize, format: .byteCount(style: .file))
-                    .monospacedDigit()
-            }
-            .width(min: 60, ideal: 65, max: 75)
-        }
-        // `safeAreaInset` pins a bar above the table, which scrolls under it.
+        content
+        // `safeAreaInset` pins a bar above the photos, which scroll under it.
         .safeAreaInset(edge: .top, spacing: 0) {
             CullingStatusBar(gallery: gallery, photos: photos)
         }
         .navigationTitle(gallery.name)
         .navigationSubtitle(gallery.folderPath)
         .toolbar {
+            Picker("Affichage", selection: $layout) {
+                Label("Grille", systemImage: "square.grid.2x2").tag(GalleryLayout.grid)
+                Label("Tableau", systemImage: "list.bullet").tag(GalleryLayout.table)
+            }
+            .pickerStyle(.segmented)
+            .help("Afficher les photos en grille ou en tableau")
             Button(
                 gallery.culledAt == nil ? "Trier les photos" : "Trier à nouveau",
                 systemImage: "wand.and.stars"
@@ -76,6 +55,14 @@ struct GalleryDetailView: View {
             .help("Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
             Button("Afficher dans le Finder", systemImage: "folder", action: revealInFinder)
         }
+        // Opens the folder (read only) and queues the missing thumbnails; again when photos are added.
+        .task(id: photos.count) {
+            loader.open(folderBookmark: gallery.folderBookmark)
+            await loader.prefetch(photos.map(\.thumbnailRequest))
+        }
+        .onDisappear { loader.stop() }
+        .onChange(of: photos.map(\.id), initial: true) { _, photoIds in browser.photoIds = photoIds }
+        .onChange(of: layout) { browser.closeViewer() }
         .alert(
             "Dossier inaccessible",
             isPresented: Binding(get: { revealError != nil }, set: { if !$0 { revealError = nil } })
@@ -83,6 +70,21 @@ struct GalleryDetailView: View {
             Button("OK") {}
         } message: {
             Text(revealError ?? "")
+        }
+    }
+
+    /// The viewer when it is open, otherwise the grid or the table.
+    // `@ViewBuilder` lets a property return different views from an `if` / `switch`, like a JSX ternary.
+    @ViewBuilder private var content: some View {
+        if browser.isViewerOpen, let index = browser.selectedIndex, photos.indices.contains(index) {
+            PhotoViewer(photos: photos, index: index, loader: loader, browser: browser)
+        } else {
+            switch layout {
+            case .grid:
+                GalleryGridView(photos: photos, loader: loader, browser: browser)
+            case .table:
+                GalleryTableView(photos: photos, browser: browser)
+            }
         }
     }
 
@@ -104,48 +106,7 @@ struct GalleryDetailView: View {
     }
 }
 
-/// Verdict as a coloured dot and a word (the word keeps it readable without colours and for VoiceOver).
-private struct VerdictBadge: View {
-    let verdict: CullingVerdict?
-
-    var body: some View {
-        if let verdict {
-            Label {
-                Text(verdict.label)
-            } icon: {
-                Circle()
-                    .fill(verdict.color)
-                    .frame(width: 8, height: 8)
-            }
-        } else {
-            Text(verbatim: "—")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Pas encore triée")
-        }
-    }
-}
-
-/// Main reason, a star for the best photo of a burst, and every reason in the tooltip.
-private struct ReasonCell: View {
-    let photo: Photo
-
-    var body: some View {
-        let messages = photo.cullingReasons.map { $0.message() }
-        HStack(spacing: 4) {
-            if photo.isBestOfBurst {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .accessibilityLabel("Meilleure photo de la rafale")
-            }
-            Text(verbatim: messages.first ?? "")
-                .lineLimit(1)
-                .foregroundStyle(photo.cullingVerdict == .keep ? .secondary : .primary)
-        }
-        .help(messages.joined(separator: "\n"))
-    }
-}
-
-/// Above the table: progress and "Annuler" while sorting, otherwise the number of photos per verdict.
+/// Above the photos: progress and "Annuler" while sorting, otherwise the number of photos per verdict.
 private struct CullingStatusBar: View {
     let gallery: Gallery
     let photos: [Photo]
@@ -199,16 +160,5 @@ private struct CullingStatusBar: View {
             Divider()
         }
         .background(.bar)
-    }
-}
-
-extension CullingVerdict {
-    var color: Color {
-        switch self {
-        case .keep: .green
-        case .review: .orange
-        case .reject: .red
-        case .unknown: .gray
-        }
     }
 }
