@@ -57,6 +57,45 @@ actor LibraryStore {
         return unfinished.count
     }
 
+    // MARK: - Culling (F3)
+
+    /// What the analysis needs: the folder bookmark and the photos (as `Sendable` copies).
+    func cullingContents(galleryId: UUID) throws -> GalleryContents {
+        let gallery = try fetchGallery(id: galleryId)
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { $0.gallery?.id == galleryId }))
+        return GalleryContents(
+            name: gallery.name,
+            folderPath: gallery.folderPath,
+            folderBookmark: gallery.folderBookmark,
+            photos: photos.map { PhotoReference(id: $0.id, relativePath: $0.relativePath, captureDate: $0.captureDate) }
+        )
+    }
+
+    /// Stores one batch of verdicts and saves it (one transaction per batch).
+    func saveCulling(_ results: [CullingResult], analyzedAt: Date) throws {
+        let ids = results.map(\.photoId)
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) }))
+        let photosById = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
+        for result in results {
+            try photosById[result.photoId]?.apply(result, analyzedAt: analyzedAt)
+        }
+        try modelContext.save()
+    }
+
+    func finishCulling(galleryId: UUID) throws {
+        try fetchGallery(id: galleryId).culledAt = Date()
+        try modelContext.save()
+    }
+
+    /// Indexed galleries that were never sorted (e.g. indexed before F3, or sorting cancelled), oldest first.
+    func galleriesToCull() throws -> [UUID] {
+        let descriptor = FetchDescriptor<Gallery>(
+            predicate: #Predicate { $0.indexedAt != nil && $0.culledAt == nil },
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        return try modelContext.fetch(descriptor).map(\.id)
+    }
+
     private func fetchGallery(id: UUID) throws -> Gallery {
         var descriptor = FetchDescriptor<Gallery>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -65,4 +104,12 @@ actor LibraryStore {
         }
         return gallery
     }
+}
+
+/// `Sendable` snapshot of a gallery, handed from `LibraryStore` to the analysis.
+struct GalleryContents: Sendable {
+    var name: String
+    var folderPath: String
+    var folderBookmark: Data
+    var photos: [PhotoReference]
 }

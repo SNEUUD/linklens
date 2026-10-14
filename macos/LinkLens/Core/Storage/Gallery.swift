@@ -18,6 +18,8 @@ final class Gallery {
     var photoCount: Int
     /// `nil` while indexing runs, set once every photo is stored.
     var indexedAt: Date?
+    /// Last time the AI sorting (F3) finished for the whole gallery; nil if never sorted.
+    var culledAt: Date?
     @Relationship(deleteRule: .cascade, inverse: \Photo.gallery)
     var photos: [Photo] = []
 

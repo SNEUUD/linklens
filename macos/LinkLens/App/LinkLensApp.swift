@@ -7,6 +7,7 @@ struct LinkLensApp: App {
     /// The SwiftData database, stored in the app's sandbox container.
     private let container: ModelContainer
     @State private var importController: ImportController
+    @State private var cullingController: CullingController
 
     init() {
         do {
@@ -14,13 +15,24 @@ struct LinkLensApp: App {
         } catch {
             fatalError("Impossible d'ouvrir la base SwiftData : \(error)")
         }
-        _importController = State(initialValue: ImportController(container: container))
+        let store = LibraryStore(modelContainer: container)
+        let culling = CullingController(store: store)
+        _cullingController = State(initialValue: culling)
+        _importController = State(initialValue: ImportController(store: store) { galleryId in
+            culling.cull(galleryId: galleryId)
+        })
+        // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch.
+        // Not while the unit tests run inside the app: they must not touch the real catalogue.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            culling.cullPendingGalleries()
+        }
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(importController)
+                .environment(cullingController)
         }
         .modelContainer(container)
         .commands {

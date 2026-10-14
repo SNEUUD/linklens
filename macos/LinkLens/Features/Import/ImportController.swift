@@ -1,6 +1,5 @@
 import AppKit
 import Observation
-import SwiftData
 
 /// Drives "Ajouter un dossier": folder picker, background indexing, progress, cancellation and errors.
 ///
@@ -17,12 +16,14 @@ final class ImportController {
     @ObservationIgnored private let store: LibraryStore
     @ObservationIgnored private let indexer: FolderIndexer
     @ObservationIgnored private var cleanupTask: Task<Void, Never>?
+    /// Called once a new gallery is fully indexed (starts the AI sorting).
+    @ObservationIgnored private let onGalleryIndexed: @MainActor (UUID) -> Void
 
     var isIndexing: Bool { indexingTask != nil }
 
-    init(container: ModelContainer) {
-        let store = LibraryStore(modelContainer: container)
+    init(store: LibraryStore, onGalleryIndexed: @escaping @MainActor (UUID) -> Void = { _ in }) {
         self.store = store
+        self.onGalleryIndexed = onGalleryIndexed
         indexer = FolderIndexer(store: store)
         cleanupTask = Task {
             _ = try? await store.deleteUnfinishedGalleries()
@@ -58,7 +59,10 @@ final class ImportController {
                     self?.progress = progress
                 }
                 switch result {
-                case .indexed(let galleryId, _), .alreadyIndexed(let galleryId):
+                case .indexed(let galleryId, _):
+                    selectedGalleryId = galleryId
+                    onGalleryIndexed(galleryId)
+                case .alreadyIndexed(let galleryId):
                     selectedGalleryId = galleryId
                 }
             } catch is CancellationError {
