@@ -1,0 +1,60 @@
+import Foundation
+import SwiftData
+import Testing
+@testable import LinkLens
+
+/// Volume test kept from the prototype: 10 000 photos must stay fast with SwiftData.
+/// If it fails, report it: GRDB is the planned fallback.
+struct LibraryVolumeTests {
+    @Test func insertsAndQueriesTenThousandPhotos() async throws {
+        let folder = try TestFolder()
+        defer { folder.remove() }
+        let storeURL = folder.url.appending(path: "volume.store")
+        let container = try ModelContainer(
+            for: Gallery.self, Photo.self,
+            configurations: ModelConfiguration(url: storeURL)
+        )
+        let store = LibraryStore(modelContainer: container)
+        let galleryId = try await store.createGallery(name: "Volume", folderPath: "/volume", folderBookmark: Data())
+
+        let clock = ContinuousClock()
+        let start = clock.now
+        let sessionStart = Date(timeIntervalSince1970: 1_780_000_000)
+        for batchStart in stride(from: 0, to: 10_000, by: 200) {
+            let drafts = (batchStart..<batchStart + 200).map { index in
+                PhotoDraft(
+                    file: PhotoFile(
+                        url: URL(filePath: "/volume/DSC\(index).ARW"),
+                        relativePath: "DSC\(index).ARW",
+                        fileSize: 25_000_000
+                    ),
+                    metadata: PhotoMetadata(
+                        captureDate: sessionStart.addingTimeInterval(Double(index) * 1.5),
+                        pixelWidth: 6000,
+                        pixelHeight: 4000
+                    ),
+                    importedAt: Date()
+                )
+            }
+            try await store.insert(drafts, galleryId: galleryId)
+        }
+        try await store.finishIndexing(galleryId: galleryId)
+        let insertDuration = start.duration(to: clock.now)
+
+        let context = ModelContext(container)
+        let queryStart = clock.now
+        var descriptor = FetchDescriptor<Photo>(
+            predicate: #Predicate { $0.gallery?.id == galleryId },
+            sortBy: [SortDescriptor(\.captureDate)]
+        )
+        descriptor.fetchLimit = 50
+        let firstPhotos = try context.fetch(descriptor)
+        let queryDuration = queryStart.duration(to: clock.now)
+
+        #expect(try context.fetchCount(FetchDescriptor<Photo>()) == 10_000)
+        #expect(try context.fetch(FetchDescriptor<Gallery>()).first?.photoCount == 10_000)
+        #expect(firstPhotos.first?.relativePath == "DSC0.ARW")
+        #expect(insertDuration < .seconds(10), "insertion de 10 000 photos : \(insertDuration)")
+        #expect(queryDuration < .milliseconds(200), "requête des 50 premières photos : \(queryDuration)")
+    }
+}

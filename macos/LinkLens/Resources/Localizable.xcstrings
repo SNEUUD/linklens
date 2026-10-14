@@ -1,12 +1,28 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
-    "Aucune galerie" : {
-
-    },
-    "Importez une carte SD ou un dossier de photos pour commencer." : {
-
-    }
+    "Afficher dans le Finder" : {},
+    "Ajouter un dossier…" : {},
+    "Annuler" : {},
+    "Aucune galerie" : {},
+    "Aucune photo JPEG, HEIC ou RAW Sony (.ARW) dans le dossier « %@ »." : {},
+    "Choisissez un dossier de photos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié." : {},
+    "Dimensions" : {},
+    "Dossier inaccessible" : {},
+    "Dossier introuvable : %@" : {},
+    "Fichier" : {},
+    "Galerie introuvable." : {},
+    "Importez une carte SD ou un dossier de photos pour commencer." : {},
+    "Indexation : %lld sur %lld" : {},
+    "Indexation impossible" : {},
+    "Indexer" : {},
+    "Indexer un dossier de photos sans le copier" : {},
+    "LinkLens n'a pas l'autorisation de lire le dossier « %@ ». Choisissez-le à nouveau." : {},
+    "OK" : {},
+    "Prise de vue" : {},
+    "Sélectionnez une galerie" : {},
+    "Taille" : {},
+    "^[%lld photo](inflect: true)" : {}
   },
   "version" : "1.0"
 }
