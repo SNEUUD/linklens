@@ -1,0 +1,9 @@
+# Contrat d'API : changements additifs uniquement, voir CLAUDE.md
+openapi: 3.1.0
+info:
+  title: LinkLens API
+  version: 0.1.0
+servers: []
+paths: {}
+components:
+  schemas: {}

@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift Package Manager
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.build/
+.swiftpm/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Environment files
+.env
+.env.*
+!.env.example
