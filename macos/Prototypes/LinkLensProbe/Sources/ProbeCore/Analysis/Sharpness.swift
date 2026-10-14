@@ -1,11 +1,17 @@
 import Accelerate
+import CoreGraphics
 import Foundation
 
 public struct SharpnessMeasurement: Sendable, Equatable {
-    /// Mean Laplacian variance of the 2 sharpest tiles out of a 4×4 grid (used for the verdict).
-    /// Tiles avoid calling a photo "blurry" just because its background is out of focus.
+    /// Score used for the verdict: Laplacian variance divided by the intensity variance (× 1000),
+    /// measured on the subject box (or the whole image when no subject was found).
+    /// Dividing by the contrast keeps a sharp dark car from looking blurry.
     public var sharpness: Double
-    /// Laplacian variance over the whole image (kept in the report for comparison).
+    /// True if `sharpness` was measured on the subject, false if on the whole image.
+    public var measuredOnSubject: Bool
+    /// Raw Laplacian variance of the 2 sharpest tiles out of 4×4 (previous method, kept for comparison).
+    public var tileSharpness: Double
+    /// Raw Laplacian variance over the whole image.
     public var globalSharpness: Double
 }
 
@@ -15,13 +21,42 @@ public struct SharpnessMeasurement: Sendable, Equatable {
 public enum Sharpness {
     static let gridSize = 4
     static let sharpestTileCount = 2
+    static let contrastScale = 1000.0
 
-    public static func measure(_ gray: GrayImage) -> SharpnessMeasurement {
+    /// - Parameter subject: subject box, normalized (0…1) with a top-left origin; nil = whole image.
+    public static func measure(_ gray: GrayImage, subject: CGRect? = nil) -> SharpnessMeasurement {
         let width = gray.width, height = gray.height
-        guard width >= 3, height >= 3 else { return SharpnessMeasurement(sharpness: 0, globalSharpness: 0) }
+        guard width >= 3, height >= 3 else {
+            return SharpnessMeasurement(sharpness: 0, measuredOnSubject: false, tileSharpness: 0, globalSharpness: 0)
+        }
+        let intensity = vDSP.integerToFloatingPoint(gray.pixels, floatingPointType: Float.self)
+        let laplacian = laplacianOf(intensity, width: width, height: height)
 
-        // UInt8 → Float, then 3×3 Laplacian convolution with vImage (Accelerate).
-        var source = vDSP.integerToFloatingPoint(gray.pixels, floatingPointType: Float.self)
+        // Previous method: sharpest tiles (kept in the report for comparison).
+        let grid = gridSize
+        let tileVariances = (0..<(grid * grid)).map { tile in
+            let rect = CGRect(x: Double(tile % grid) / Double(grid), y: Double(tile / grid) / Double(grid),
+                              width: 1 / Double(grid), height: 1 / Double(grid))
+            return variance(of: laplacian, width: width, height: height, in: rect)
+        }
+        let sharpest = tileVariances.sorted(by: >).prefix(sharpestTileCount)
+        let fullImage = CGRect(x: 0, y: 0, width: 1, height: 1)
+
+        // New method: subject only, relative to its own contrast.
+        let region = subject ?? fullImage
+        let edgeVariance = variance(of: laplacian, width: width, height: height, in: region)
+        let contrastVariance = variance(of: intensity, width: width, height: height, in: region)
+        return SharpnessMeasurement(
+            sharpness: edgeVariance / max(contrastVariance, 1) * contrastScale,
+            measuredOnSubject: subject != nil,
+            tileSharpness: sharpest.reduce(0, +) / Double(sharpest.count),
+            globalSharpness: variance(of: laplacian, width: width, height: height, in: fullImage)
+        )
+    }
+
+    /// 3×3 Laplacian convolution with vImage (Accelerate).
+    static func laplacianOf(_ source: [Float], width: Int, height: Int) -> [Float] {
+        var source = source
         var laplacian = [Float](repeating: 0, count: width * height)
         let kernel: [Float] = [0, 1, 0,
                                1, -4, 1,
@@ -42,32 +77,28 @@ public enum Sharpness {
                 )
             }
         }
+        return laplacian
+    }
 
-        // Sum and sum of squares per tile (variance = E[x²] − E[x]²).
-        let grid = gridSize
-        var sums = [Double](repeating: 0, count: grid * grid)
-        var squares = [Double](repeating: 0, count: grid * grid)
-        var counts = [Int](repeating: 0, count: grid * grid)
-        for y in 1..<(height - 1) { // skip the 1-pixel border affected by edge extension
-            let tileRow = min(grid - 1, y * grid / height)
+    /// Variance of `values` inside a normalized top-left-origin rect, skipping the 1-pixel image border
+    /// (affected by edge extension). Variance = E[x²] − E[x]².
+    static func variance(of values: [Float], width: Int, height: Int, in rect: CGRect) -> Double {
+        let x0 = max(1, Int((rect.minX * CGFloat(width)).rounded(.down)))
+        let x1 = min(width - 1, Int((rect.maxX * CGFloat(width)).rounded(.up)))
+        let y0 = max(1, Int((rect.minY * CGFloat(height)).rounded(.down)))
+        let y1 = min(height - 1, Int((rect.maxY * CGFloat(height)).rounded(.up)))
+        guard x1 > x0, y1 > y0 else { return 0 }
+        var sum = 0.0, squares = 0.0
+        for y in y0..<y1 {
             let rowStart = y * width
-            for x in 1..<(width - 1) {
-                let tile = tileRow * grid + min(grid - 1, x * grid / width)
-                let value = Double(laplacian[rowStart + x])
-                sums[tile] += value
-                squares[tile] += value * value
-                counts[tile] += 1
+            for x in x0..<x1 {
+                let value = Double(values[rowStart + x])
+                sum += value
+                squares += value * value
             }
         }
-
-        func variance(sum: Double, square: Double, count: Int) -> Double {
-            guard count > 0 else { return 0 }
-            let mean = sum / Double(count)
-            return max(0, square / Double(count) - mean * mean)
-        }
-        let tileVariances = (0..<(grid * grid)).map { variance(sum: sums[$0], square: squares[$0], count: counts[$0]) }
-        let sharpest = tileVariances.sorted(by: >).prefix(sharpestTileCount)
-        let global = variance(sum: sums.reduce(0, +), square: squares.reduce(0, +), count: counts.reduce(0, +))
-        return SharpnessMeasurement(sharpness: sharpest.reduce(0, +) / Double(sharpest.count), globalSharpness: global)
+        let count = Double((x1 - x0) * (y1 - y0))
+        let mean = sum / count
+        return max(0, squares / count - mean * mean)
     }
 }

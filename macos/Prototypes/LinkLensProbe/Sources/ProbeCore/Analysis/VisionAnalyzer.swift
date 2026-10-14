@@ -18,6 +18,8 @@ public struct VisionMeasurement: Sendable {
     public var isUtility: Bool?
     public var faces: [FaceResult]
     public var featurePrint: FeaturePrintObservation?
+    /// Main subject (union of Vision's salient objects), normalized with a top-left origin. Nil if none found.
+    public var subjectBox: CGRect?
 }
 
 /// Runs the Vision requests on an upright image, using the Swift Vision API (macOS 15+).
@@ -26,11 +28,12 @@ enum VisionAnalyzer {
         let handler = ImageRequestHandler(image)
         let imageSize = CGSize(width: image.width, height: image.height)
 
-        // Three independent requests on the same image, performed together.
-        let (scores, qualityFaces, featurePrint) = try await handler.perform(
+        // Four independent requests on the same image, performed together.
+        let (scores, qualityFaces, featurePrint, saliency) = try await handler.perform(
             CalculateImageAestheticsScoresRequest(),
             DetectFaceCaptureQualityRequest(),
-            GenerateImageFeaturePrintRequest()
+            GenerateImageFeaturePrintRequest(),
+            GenerateObjectnessBasedSaliencyImageRequest()
         )
 
         // Landmarks (eye contours) for the faces found above.
@@ -49,8 +52,24 @@ enum VisionAnalyzer {
             aesthetics: Double(scores.overallScore),
             isUtility: scores.isUtility,
             faces: faces,
-            featurePrint: featurePrint
+            featurePrint: featurePrint,
+            subjectBox: subjectBox(from: saliency)
         )
+    }
+
+    /// "Objectness" saliency finds the objects that stand out (here: the car).
+    /// Several boxes are merged so a subject split in two still counts as one.
+    private static func subjectBox(from saliency: SaliencyImageObservation) -> CGRect? {
+        let union = saliency.salientObjects
+            .map(\.boundingBox.cgRect)
+            .reduce(CGRect.null) { $0.union($1) }
+        guard !union.isNull, union.width > 0, union.height > 0 else { return nil }
+        return topLeft(union)
+    }
+
+    /// Vision uses a bottom-left origin; the report and the HTML use a top-left origin (like CSS).
+    private static func topLeft(_ box: CGRect) -> CGRect {
+        CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
     }
 
     private static func faceResult(
@@ -59,8 +78,7 @@ enum VisionAnalyzer {
         imageSize: CGSize,
         thresholds: Thresholds
     ) -> FaceResult {
-        let box = face.boundingBox.cgRect // Vision: origin at the bottom-left
-        let topLeftBox = CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
+        let box = face.boundingBox.cgRect
         let faceHeightPixels = Double(box.height * imageSize.height)
 
         var openness: Double?
@@ -71,7 +89,7 @@ enum VisionAnalyzer {
             if !values.isEmpty { openness = values.reduce(0, +) / Double(values.count) }
         }
         return FaceResult(
-            boundingBox: topLeftBox,
+            boundingBox: topLeft(box),
             captureQuality: face.captureQuality.map { Double($0.score) },
             eyeOpenness: openness,
             eyesClosed: openness.map { $0 < thresholds.eyeClosedOpenness }

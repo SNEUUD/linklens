@@ -68,7 +68,7 @@ public enum ContactSheet {
         let reasons = photo.reasons.isEmpty
             ? "<li class=\"ok\">Aucun défaut détecté</li>"
             : photo.reasons.map { "<li class=\"\($0.verdict.rawValue)\">\(escape($0.message))</li>" }.joined()
-        var scores = ["Netteté \(Int(photo.sharpness.rounded()))"]
+        var scores = ["Netteté \(photo.sharpnessOnSubject ? "sujet" : "image") \(Int(photo.sharpness.rounded()))"]
         if let aesthetics = photo.aesthetics { scores.append("Esthétique \(String(format: "%.2f", aesthetics))") }
         if !photo.faces.isEmpty {
             let qualities = photo.faces.compactMap(\.captureQuality)
@@ -81,7 +81,7 @@ public enum ContactSheet {
 
         return """
         <figure class="card \(photo.verdict.rawValue)" data-verdict="\(photo.verdict.rawValue)">
-          <a href="\(escape(photo.thumbnail))" target="_blank"><img loading="lazy" src="\(escape(photo.thumbnail))" alt="\(escape(photo.fileName))"></a>
+          <a class="frame" href="\(escape(photo.thumbnail))" target="_blank" style="aspect-ratio: \(max(photo.pixelWidth, 1)) / \(max(photo.pixelHeight, 1))"><img loading="lazy" src="\(escape(photo.thumbnail))" alt="\(escape(photo.fileName))">\(subjectOverlay(photo))</a>
           <figcaption>
             <div class="title"><span class="badge \(photo.verdict.rawValue)">\(photo.verdict.label)</span>\(photo.isBestOfBurst ? "<span class=\"star\" title=\"Meilleure de la rafale\">★</span>" : "")<span class="name">\(escape(photo.fileName))</span></div>
             <ul class="reasons">\(reasons)</ul>
@@ -89,6 +89,13 @@ public enum ContactSheet {
           </figcaption>
         </figure>
         """
+    }
+
+    /// Dashed outline of the subject found by Vision, positioned in % over the thumbnail.
+    static func subjectOverlay(_ photo: PhotoResult) -> String {
+        guard let box = photo.subjectBox else { return "" }
+        func percent(_ value: CGFloat) -> String { String(format: "%.2f%%", value * 100) }
+        return "<span class=\"subject\" title=\"Sujet détecté\" style=\"left:\(percent(box.minX));top:\(percent(box.minY));width:\(percent(box.width));height:\(percent(box.height))\"></span>"
     }
 
     static func escape(_ text: String) -> String {
@@ -120,7 +127,9 @@ public enum ContactSheet {
     .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
     .card { margin:0; background:var(--card); border-radius:10px; overflow:hidden; border:3px solid var(--line); }
     .card.keep { border-color:var(--keep); } .card.review { border-color:var(--review); } .card.reject { border-color:var(--reject); }
-    .card img { display:block; width:100%; aspect-ratio:2/3; object-fit:contain; background:#000; }
+    .frame { position:relative; display:block; background:#000; }
+    .frame img { display:block; width:100%; height:100%; object-fit:fill; }
+    .subject { position:absolute; border:2px dashed rgba(255,255,255,.9); box-shadow:0 0 0 1px rgba(0,0,0,.5); pointer-events:none; }
     figcaption { padding:8px 10px 10px; }
     .title { display:flex; align-items:center; gap:6px; font-weight:600; }
     .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

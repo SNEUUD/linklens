@@ -11,7 +11,9 @@ public enum ReportWriter {
 
     public static func writeCSV(_ report: AnalysisReport, to url: URL) throws {
         let header = [
-            "file", "verdict", "main_reason", "all_reasons", "sharpness", "global_sharpness",
+            "file", "verdict", "main_reason", "all_reasons", "sharpness", "sharpness_on_subject",
+            "tile_sharpness", "global_sharpness", "subject_x", "subject_y", "subject_width", "subject_height",
+            "subject_min_margin",
             "aesthetics", "is_utility", "faces", "eyes_closed_faces", "face_quality_mean",
             "eye_openness_min", "highlight_clipping", "shadow_clipping", "burst_id", "best_of_burst",
             "burst_score", "capture_date", "preview_source", "sha256",
@@ -27,7 +29,14 @@ public enum ReportWriter {
                 photo.reasons.first?.message ?? "",
                 photo.reasons.map(\.message).joined(separator: " | "),
                 number(photo.sharpness, 1),
+                photo.sharpnessOnSubject ? "true" : "false",
+                number(photo.tileSharpness, 1),
                 number(photo.globalSharpness, 1),
+                photo.subjectBox.map { number($0.minX, 3) } ?? "",
+                photo.subjectBox.map { number($0.minY, 3) } ?? "",
+                photo.subjectBox.map { number($0.width, 3) } ?? "",
+                photo.subjectBox.map { number($0.height, 3) } ?? "",
+                photo.subjectBox.map { number(min($0.minX, $0.minY, 1 - $0.maxX, 1 - $0.maxY), 3) } ?? "",
                 photo.aesthetics.map { number($0, 3) } ?? "",
                 photo.isUtility.map { $0 ? "true" : "false" } ?? "",
                 String(photo.faces.count),

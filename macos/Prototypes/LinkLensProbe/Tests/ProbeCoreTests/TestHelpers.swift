@@ -5,12 +5,13 @@ import Foundation
 /// Builds a PhotoAnalysis without running Vision, for pure-logic tests.
 func makeAnalysis(
     _ name: String,
-    sharpness: Double = 400,
+    sharpness: Double = 120,
     aesthetics: Double? = 0.2,
     isUtility: Bool = false,
     highlights: Double = 0,
     shadows: Double = 0,
     faces: [FaceResult] = [],
+    subject: CGRect? = CGRect(x: 0.3, y: 0.4, width: 0.4, height: 0.2),
     sha256: String? = nil,
     date: Date? = nil
 ) -> PhotoAnalysis {
@@ -19,8 +20,11 @@ func makeAnalysis(
         sha256: sha256 ?? "hash-\(name)",
         metadata: PhotoMetadata(captureDate: date, pixelWidth: 4000, pixelHeight: 6000, orientation: 8),
         previewSource: .embedded,
-        vision: VisionMeasurement(aesthetics: aesthetics, isUtility: isUtility, faces: faces, featurePrint: nil),
-        sharpness: SharpnessMeasurement(sharpness: sharpness, globalSharpness: sharpness),
+        vision: VisionMeasurement(aesthetics: aesthetics, isUtility: isUtility, faces: faces, featurePrint: nil, subjectBox: subject),
+        sharpness: SharpnessMeasurement(
+            sharpness: sharpness, measuredOnSubject: subject != nil,
+            tileSharpness: sharpness, globalSharpness: sharpness
+        ),
         exposure: ExposureMeasurement(highlightClipping: highlights, shadowClipping: shadows),
         thumbnail: "thumbs/\(name).jpg",
         timings: StageTimings()
@@ -36,12 +40,12 @@ func face(quality: Double? = 0.5, eyesClosed: Bool? = false) -> FaceResult {
     )
 }
 
-/// Black-and-white checkerboard with `square`-pixel squares.
-func checkerboard(width: Int, height: Int, square: Int) -> GrayImage {
-    var pixels = [UInt8](repeating: 0, count: width * height)
+/// Checkerboard with `square`-pixel squares, alternating `dark` and `light` levels.
+func checkerboard(width: Int, height: Int, square: Int, dark: UInt8 = 0, light: UInt8 = 255) -> GrayImage {
+    var pixels = [UInt8](repeating: dark, count: width * height)
     for y in 0..<height {
         for x in 0..<width where (x / square + y / square) % 2 == 0 {
-            pixels[y * width + x] = 255
+            pixels[y * width + x] = light
         }
     }
     return GrayImage(width: width, height: height, pixels: pixels)

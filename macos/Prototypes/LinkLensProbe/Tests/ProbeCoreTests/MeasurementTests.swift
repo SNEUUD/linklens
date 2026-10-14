@@ -52,13 +52,38 @@ struct SharpnessTests {
         #expect(blurredValue < sharpValue / 5)
     }
 
-    @Test func outOfFocusBackgroundDoesNotHideASharpSubject() {
-        // Left quarter sharp, the rest flat (like a subject in front of a blurry background).
+    @Test func sharpTilesStandOutFromAFlatBackground() {
+        let result = Sharpness.measure(leftQuarterSharp())
+        #expect(result.tileSharpness > result.globalSharpness * 2)
+    }
+
+    @Test func blurrySubjectInFrontOfASharpBackground() {
+        // Like DSC04301: the background (fence, track lines) is sharp, the car is soft.
+        let sharp = checkerboard(width: 128, height: 128, square: 8)
+        let soft = boxBlur(sharp, radius: 3)
+        var image = sharp
+        for y in 0..<128 { for x in 0..<32 { image.pixels[y * 128 + x] = soft.pixels[y * 128 + x] } }
+
+        let onSubject = Sharpness.measure(image, subject: CGRect(x: 0, y: 0, width: 0.25, height: 1))
+        let onImage = Sharpness.measure(image)
+        #expect(onSubject.measuredOnSubject && !onImage.measuredOnSubject)
+        #expect(onSubject.sharpness < onImage.sharpness / 2)
+    }
+
+    @Test func contrastDoesNotChangeTheScore() {
+        // Same pattern, dark and low-contrast (like a black car) vs. bright and high-contrast.
+        let bright = Sharpness.measure(checkerboard(width: 128, height: 128, square: 8))
+        let dark = Sharpness.measure(checkerboard(width: 128, height: 128, square: 8, dark: 10, light: 50))
+        #expect(dark.globalSharpness < bright.globalSharpness / 10)
+        #expect(abs(dark.sharpness - bright.sharpness) / bright.sharpness < 0.05)
+    }
+
+    /// Left quarter: fine checkerboard; the rest: flat grey.
+    func leftQuarterSharp() -> GrayImage {
         var image = GrayImage(width: 128, height: 128, pixels: [UInt8](repeating: 128, count: 128 * 128))
         let board = checkerboard(width: 128, height: 128, square: 4)
         for y in 0..<128 { for x in 0..<32 { image.pixels[y * 128 + x] = board.pixels[y * 128 + x] } }
-        let result = Sharpness.measure(image)
-        #expect(result.sharpness > result.globalSharpness * 2)
+        return image
     }
 }
 

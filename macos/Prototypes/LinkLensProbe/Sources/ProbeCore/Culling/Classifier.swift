@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Turns measurements into Garder / À revoir / Rejeter, always with the reasons.
@@ -74,7 +75,10 @@ public enum Classifier {
                 isUtility: analysis.vision.isUtility,
                 faces: analysis.vision.faces,
                 sharpness: analysis.sharpness.sharpness,
+                sharpnessOnSubject: analysis.sharpness.measuredOnSubject,
+                tileSharpness: analysis.sharpness.tileSharpness,
                 globalSharpness: analysis.sharpness.globalSharpness,
+                subjectBox: analysis.vision.subjectBox,
                 highlightClipping: analysis.exposure.highlightClipping,
                 shadowClipping: analysis.exposure.shadowClipping,
                 burstId: burstIds[index],
@@ -93,12 +97,23 @@ public enum Classifier {
     static func photoReasons(_ analysis: PhotoAnalysis, _ t: Thresholds) -> [Reason] {
         var reasons: [Reason] = []
         let sharpness = analysis.sharpness.sharpness
+        let target = analysis.sharpness.measuredOnSubject ? "du sujet" : "de l'image"
         if sharpness < t.blurReject {
             reasons.append(Reason(code: .blurry, verdict: .reject,
-                                  message: "Floue (netteté \(format(sharpness)) < \(format(t.blurReject)))"))
+                                  message: "Floue (netteté \(target) \(format(sharpness)) < \(format(t.blurReject)))"))
         } else if sharpness < t.blurReview {
             reasons.append(Reason(code: .slightlyBlurry, verdict: .review,
-                                  message: "Légèrement floue (netteté \(format(sharpness)) < \(format(t.blurReview)))"))
+                                  message: "Légèrement floue (netteté \(target) \(format(sharpness)) < \(format(t.blurReview)))"))
+        }
+
+        if let subject = analysis.vision.subjectBox, let edge = closestEdge(of: subject, t) {
+            if edge.margin < t.subjectCutMargin {
+                reasons.append(Reason(code: .subjectCut, verdict: .reject,
+                                      message: "Sujet coupé \(edge.side.cutLabel)"))
+            } else if edge.margin < t.subjectTightMargin {
+                reasons.append(Reason(code: .subjectTight, verdict: .review,
+                                      message: "Sujet collé \(edge.side.tightLabel) (marge \(percent(edge.margin, digits: 1)))"))
+            }
         }
 
         let highlights = analysis.exposure.highlightClipping
@@ -129,6 +144,45 @@ public enum Classifier {
                                   message: "Photo utilitaire (document, capture d'écran…)"))
         }
         return reasons
+    }
+
+    // MARK: - Framing
+
+    enum Side {
+        case left, right, top, bottom
+
+        /// "Sujet coupé …"
+        var cutLabel: String {
+            switch self {
+            case .left: "par le bord gauche"
+            case .right: "par le bord droit"
+            case .top: "par le haut"
+            case .bottom: "par le bas"
+            }
+        }
+
+        /// "Sujet collé …"
+        var tightLabel: String {
+            switch self {
+            case .left: "au bord gauche"
+            case .right: "au bord droit"
+            case .top: "au bord du haut"
+            case .bottom: "au bord du bas"
+            }
+        }
+    }
+
+    /// The image border closest to the subject, ignoring an axis where the subject fills the frame
+    /// (a close-up portrait legitimately touches the top and bottom).
+    static func closestEdge(of subject: CGRect, _ t: Thresholds) -> (side: Side, margin: Double)? {
+        var margins: [(side: Side, margin: Double)] = []
+        if subject.width <= t.framingMaxSubjectSize {
+            margins += [(.left, Double(subject.minX)), (.right, Double(1 - subject.maxX))]
+        }
+        if subject.height <= t.framingMaxSubjectSize {
+            margins += [(.top, Double(subject.minY)), (.bottom, Double(1 - subject.maxY))]
+        }
+        return margins.min { $0.margin < $1.margin }
     }
 
     // MARK: - Burst score
@@ -175,7 +229,7 @@ public enum Classifier {
         value.formatted(.number.precision(.fractionLength(digits)).locale(Locale(identifier: "fr_FR")))
     }
 
-    private static func percent(_ share: Double) -> String {
-        share.formatted(.percent.precision(.fractionLength(0)).locale(Locale(identifier: "fr_FR")))
+    private static func percent(_ share: Double, digits: Int = 0) -> String {
+        share.formatted(.percent.precision(.fractionLength(digits)).locale(Locale(identifier: "fr_FR")))
     }
 }

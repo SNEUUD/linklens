@@ -52,6 +52,35 @@ struct ClassifierTests {
         #expect(photos[1].reasons.first?.code == .slightlyBlurry)
     }
 
+    @Test func subjectCutByTheRightEdge() {
+        // Like DSC04317: the car's box stops 1.5 % before the right edge.
+        let analysis = makeAnalysis("cut", subject: CGRect(x: 0.48, y: 0.34, width: 0.505, height: 0.22))
+        let (photos, _) = Classifier.classify([analysis], bursts: [], thresholds: thresholds)
+        #expect(photos[0].verdict == .reject)
+        #expect(photos[0].reasons.first?.message == "Sujet coupé par le bord droit")
+    }
+
+    @Test func subjectTooCloseToTheEdge() {
+        let analysis = makeAnalysis("tight", subject: CGRect(x: 0.04, y: 0.4, width: 0.5, height: 0.2))
+        let (photos, _) = Classifier.classify([analysis], bursts: [], thresholds: thresholds)
+        #expect(photos[0].verdict == .review)
+        #expect(photos[0].reasons.first?.code == .subjectTight)
+        #expect(photos[0].reasons.first?.message == "Sujet collé au bord gauche (marge 4,0\u{a0}%)")
+    }
+
+    @Test func frameFillingSubjectIsNotCut() {
+        // A close-up fills the frame: touching the borders is expected.
+        let analysis = makeAnalysis("closeup", subject: CGRect(x: 0, y: 0, width: 0.95, height: 1))
+        #expect(Classifier.closestEdge(of: analysis.vision.subjectBox!, thresholds) == nil)
+        let (photos, _) = Classifier.classify([analysis], bursts: [], thresholds: thresholds)
+        #expect(photos[0].verdict == .keep)
+    }
+
+    @Test func noSubjectMeansNoFramingCheck() {
+        let (photos, _) = Classifier.classify([makeAnalysis("none", subject: nil)], bursts: [], thresholds: thresholds)
+        #expect(photos[0].verdict == .keep)
+    }
+
     @Test func mostSevereReasonComesFirst() {
         let analysis = makeAnalysis("a", aesthetics: -0.8, highlights: 0.5)
         let (photos, _) = Classifier.classify([analysis], bursts: [], thresholds: thresholds)

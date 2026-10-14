@@ -29,6 +29,7 @@ public enum ReasonCode: String, Codable, Sendable {
     case blurry, slightlyBlurry
     case overexposed, slightlyOverexposed, underexposed
     case eyesClosed
+    case subjectCut, subjectTight
     case lowAesthetics, utility
     case exactDuplicate
     case burstRunnerUp, burstLoser
@@ -55,8 +56,13 @@ public struct PhotoResult: Codable, Sendable {
     public var aesthetics: Double?
     public var isUtility: Bool?
     public var faces: [FaceResult]
+    /// Verdict score: subject sharpness relative to its contrast (see `SharpnessMeasurement`).
     public var sharpness: Double
+    public var sharpnessOnSubject: Bool
+    public var tileSharpness: Double
     public var globalSharpness: Double
+    /// Main subject found by Vision, normalized, top-left origin.
+    public var subjectBox: CGRect?
     public var highlightClipping: Double
     public var shadowClipping: Double
     public var burstId: Int?

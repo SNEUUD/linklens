@@ -4,11 +4,20 @@ import Foundation
 /// Override any subset without recompiling: `analyze --thresholds my-thresholds.json`
 /// (`analyze --print-thresholds` prints the current values as JSON).
 public struct Thresholds: Codable, Sendable, Equatable {
-    // MARK: Blur (variance of the Laplacian, image scaled to `analysisLongSide`)
+    // MARK: Blur (Laplacian variance ÷ contrast × 1000, on the subject; image scaled to `analysisLongSide`)
     /// Long side, in pixels, of the grayscale image used for blur and exposure.
     public var analysisLongSide = 1024
-    public var blurReview = 100.0
-    public var blurReject = 30.0
+    /// Calibrated on the first real session (car panning shots): values ranged from 35 to 203.
+    public var blurReview = 65.0
+    public var blurReject = 45.0
+
+    // MARK: Framing (distance between the subject and the image border, share of the image size)
+    /// Below this margin the subject is considered cut by the border ("Rejeter").
+    public var subjectCutMargin = 0.03
+    /// Below this margin the subject is considered too close to the border ("À revoir").
+    public var subjectTightMargin = 0.05
+    /// Subjects larger than this (share of width or height) fill the frame: no framing check on that axis.
+    public var framingMaxSubjectSize = 0.8
 
     // MARK: Exposure (share of pixels, 0…1)
     public var highlightReview = 0.05

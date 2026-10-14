@@ -46,21 +46,22 @@ enum PhotoAnalyzer {
         let sha256 = try measure(&timings.hash) { try FileHasher.sha256(of: file.url) }
         try Task.checkCancellation()
 
+        // Vision first: the sharpness is measured on the subject it finds.
+        let clock = ContinuousClock()
+        let visionStart = clock.now
+        let vision = try await VisionAnalyzer.analyze(preview.image, thresholds: thresholds)
+        timings.vision = visionStart.duration(to: clock.now).seconds
+        try Task.checkCancellation()
+
         let (sharpness, exposure) = try measure(&timings.pixels) {
             let gray = try GrayImage(image: preview.image, longSide: thresholds.analysisLongSide)
-            return (Sharpness.measure(gray), Exposure.measure(gray))
+            return (Sharpness.measure(gray, subject: vision.subjectBox), Exposure.measure(gray))
         }
 
         let thumbnailName = ThumbnailWriter.fileName(for: file.relativePath)
         try measure(&timings.thumbnail) {
             try ThumbnailWriter.write(preview.image, to: thumbsFolder.appending(path: thumbnailName))
         }
-        try Task.checkCancellation()
-
-        let clock = ContinuousClock()
-        let visionStart = clock.now
-        let vision = try await VisionAnalyzer.analyze(preview.image, thresholds: thresholds)
-        timings.vision = visionStart.duration(to: clock.now).seconds
 
         return PhotoAnalysis(
             file: file,
