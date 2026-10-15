@@ -9,6 +9,8 @@ struct PhotoViewer: View {
     let index: Int
     let loader: ThumbnailLoader
     let browser: GalleryBrowser
+    /// Disk unplugged (F9): the largest image in memory or in the cache is shown, with a notice.
+    var availability: GalleryAvailability = .available
     @State private var preview: LoadedImage?
     @State private var thumbnail: LoadedImage?
     @FocusState private var isFocused: Bool
@@ -47,12 +49,20 @@ struct PhotoViewer: View {
         .onKeyPress(characters: CharacterSet(charactersIn: "sS"), phases: .down) { _ in
             browser.toggleSelectedBurst() ? .handled : .ignored
         }
-        .task(id: photo.id) { await load(photo) }
+        // Again when the disk comes back (F9): the full preview replaces the cached thumbnail.
+        .task(id: LoadKey(photoId: photo.id, canUseOriginals: availability.canUseOriginals)) { await load(photo) }
+    }
+
+    private struct LoadKey: Hashable {
+        var photoId: UUID
+        var canUseOriginals: Bool
     }
 
     private func imageArea(for photo: Photo) -> some View {
         // The full preview when it is loaded, the grid thumbnail meanwhile (or when the disk is unplugged).
-        let image = [preview, thumbnail].compactMap { $0 }.first { $0.photoId == photo.id }?.image
+        let loadedPreview = preview?.photoId == photo.id ? preview?.image : nil
+        let image = loadedPreview
+            ?? (thumbnail?.photoId == photo.id ? thumbnail?.image : nil)
             ?? loader.cachedThumbnail(for: photo.id)
         return ZStack {
             Color.black
@@ -61,8 +71,24 @@ struct PhotoViewer: View {
                     .resizable()
                     .scaledToFit()
                     .padding(12)
+            } else if !availability.canUseOriginals {
+                // No thumbnail was made while the disk was there: nothing to show, but no endless spinner either.
+                ContentUnavailableView("Pas de miniature en cache", systemImage: "photo")
+                    .foregroundStyle(.white.opacity(0.7))
             } else {
                 ProgressView()
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let message = availability.message, loadedPreview == nil {
+                Label("Aperçu réduit : \(message)", systemImage: availability.systemImage)
+                    .font(.callout)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.65), in: Capsule())
+                    .padding(16)
+                    .help("Les fichiers originaux ne sont pas accessibles : LinkLens montre la plus grande image gardée en cache.")
             }
         }
         .overlay(alignment: .topLeading) {

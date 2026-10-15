@@ -17,6 +17,10 @@ final class Gallery {
     /// Read-write bookmark of the same folder, only needed to put duplicates in the trash (F5).
     /// Set by a card import (F1), or once the user has allowed it; nil for a folder only indexed (F2).
     var writeBookmark: Data?
+    /// Name and id of the disk the folder is on, saved while it is mounted (F9): once the disk is
+    /// unplugged, the app can still say « Disque « Photos 2TB » non connecté ». Nil until first seen.
+    var volumeName: String?
+    var volumeUUID: String?
     /// Photos and videos stored so far, updated batch by batch (cheaper to display than `photos.count`).
     var photoCount: Int
     /// How many of `photoCount` are videos (F1). A default value lets SwiftData migrate older catalogues.

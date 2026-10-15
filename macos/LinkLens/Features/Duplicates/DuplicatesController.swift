@@ -30,6 +30,10 @@ final class DuplicatesController {
     @ObservationIgnored private let trasher: DuplicateTrasher
     /// Asks the user to allow changes in a gallery folder. Returns the folder chosen, or nil if refused.
     @ObservationIgnored private let requestWriteAccess: @MainActor (GalleryLocation) -> URL?
+    /// Whether a gallery's disk is plugged in (F9), set by the app from `GalleryAvailabilityMonitor`.
+    /// A closure stored in a property, like passing a function prop in React. The views calling
+    /// `selections` still redraw when the monitor changes: SwiftUI tracks what the closure reads.
+    @ObservationIgnored var galleryAvailability: @MainActor (UUID) -> GalleryAvailability = { _ in .available }
     @ObservationIgnored private var scanTask: Task<Void, Never>?
     @ObservationIgnored private var trashTask: Task<Void, Never>?
 
@@ -95,13 +99,25 @@ final class DuplicatesController {
         }
     }
 
-    /// What "Mettre à la corbeille" would do with the current choices.
+    /// What "Mettre à la corbeille" would do with the current choices. Copies on an unplugged disk
+    /// stay where they are (F9); a group whose kept copy is on one is left alone, since the kept copy
+    /// must be read again before anything moves.
     var selections: [TrashSelection] {
         (report?.groups ?? []).filter(isIncluded).compactMap { group in
             let keptId = keptPhotoId(in: group)
-            guard let keep = group.copies.first(where: { $0.photoId == keptId }) else { return nil }
-            return TrashSelection(sha256: group.sha256, keep: keep, trash: group.copies.filter { $0.photoId != keptId })
+            guard let keep = group.copies.first(where: { $0.photoId == keptId }), isAvailable(keep) else { return nil }
+            let trash = group.copies.filter { $0.photoId != keptId && isAvailable($0) }
+            return trash.isEmpty ? nil : TrashSelection(sha256: group.sha256, keep: keep, trash: trash)
         }
+    }
+
+    /// Why this copy cannot be moved or used as the kept copy now, nil when it can.
+    func availability(of copy: DuplicateCopy) -> GalleryAvailability {
+        galleryAvailability(copy.galleryId)
+    }
+
+    private func isAvailable(_ copy: DuplicateCopy) -> Bool {
+        availability(of: copy).canUseOriginals
     }
 
     var selectedCopyCount: Int { selections.reduce(0) { $0 + $1.trash.count } }
@@ -198,7 +214,8 @@ final class DuplicatesController {
     /// the permission is then saved). A refused folder is left out: its copies stay in place.
     private func openForWriting(_ galleries: [GalleryLocation]) async -> WriteAccess {
         var access = WriteAccess()
-        for gallery in galleries {
+        // No folder picker for a disk that is not plugged in: its files are reported as left in place.
+        for gallery in galleries where galleryAvailability(gallery.id).canUseOriginals {
             if let bookmark = gallery.writeBookmark,
                let folder = try? FolderBookmark.resolve(bookmark),
                folder.startAccessingSecurityScopedResource() {

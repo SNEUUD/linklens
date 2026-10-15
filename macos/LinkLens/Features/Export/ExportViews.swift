@@ -37,6 +37,7 @@ struct ExportSheet: View {
     let photos: [Photo]
     let selectedPhotoId: UUID?
     @Environment(ExportController.self) private var exportController
+    @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
     // `dismiss` closes the sheet that shows this view (like calling `onClose` passed by a parent modal).
     @Environment(\.dismiss) private var dismiss
     @AppStorage("exportPreset") private var preset = ExportPreset.webJPEG
@@ -79,9 +80,17 @@ struct ExportSheet: View {
                 }
             }
 
-            Text("Les originaux ne sont jamais modifiés.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            // The disk can be unplugged while the sheet is open (F9).
+            let availability = availabilityMonitor.availability(of: gallery.id)
+            if let help = availability.help(for: .export) {
+                Label(help, systemImage: availability.systemImage)
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            } else {
+                Text("Les originaux ne sont jamais modifiés.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
 
             HStack {
                 Spacer()
@@ -89,7 +98,7 @@ struct ExportSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Choisir le dossier…", action: export)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(items.isEmpty)
+                    .disabled(items.isEmpty || !availabilityMonitor.availability(of: gallery.id).canUseOriginals)
             }
         }
         .padding(20)

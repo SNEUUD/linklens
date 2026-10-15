@@ -23,7 +23,8 @@ enum FolderBookmark {
         try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
     }
 
-    /// Returns the folder URL. A stale bookmark (folder moved or renamed) is handled with F9.
+    /// Returns the folder URL. A stale bookmark (folder moved or renamed) still resolves;
+    /// `GalleryAvailabilityMonitor` (F9) saves a fresh one.
     static func resolve(_ bookmark: Data) throws -> URL {
         var isStale = false
         return try URL(
@@ -32,6 +33,25 @@ enum FolderBookmark {
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         )
+    }
+
+    /// Same, for the availability check (F9): never tries to mount a disk that is not there, and tells
+    /// whether the bookmark is stale. `(url: URL, isStale: Bool)` is a tuple with named parts, like
+    /// returning `{ url, isStale }` from a TypeScript function.
+    static func resolveWithoutMounting(_ bookmark: Data) throws -> (url: URL, isStale: Bool) {
+        var isStale = false
+        let url = try URL(
+            resolvingBookmarkData: bookmark,
+            options: [.withSecurityScope, .withoutUI, .withoutMounting],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        )
+        return (url, isStale)
+    }
+
+    /// True for a folder in the user's trash (~/.Trash) or the trash of an external disk (.Trashes).
+    static func isInTrash(_ url: URL) -> Bool {
+        url.standardizedFileURL.pathComponents.contains { $0 == ".Trash" || $0 == ".Trashes" }
     }
 
     /// Canonical form of a folder path, used to compare folders.

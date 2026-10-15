@@ -30,6 +30,9 @@ final class ThumbnailLoader {
     let maxConcurrentGenerations: Int
     /// Opened folder of the gallery, nil when it could not be reached.
     private(set) var folder: URL?
+    /// Counts the openings of the folder: a late read from before an unplug and replug must not
+    /// close the folder opened since.
+    private var folderOpening = 0
 
     /// Decoded thumbnails, dropped by the system when memory runs low (about 700 KB each).
     private let memory = NSCache<NSUUID, CGImage>()
@@ -61,16 +64,24 @@ final class ThumbnailLoader {
     func open(folderBookmark: Data) {
         isStopped = false
         guard folder == nil else { return }
-        guard let url = try? FolderBookmark.resolve(folderBookmark), url.startAccessingSecurityScopedResource() else {
+        guard let url = try? FolderBookmark.resolveWithoutMounting(folderBookmark).url, url.startAccessingSecurityScopedResource() else {
             Self.logger.notice("Gallery folder unreachable: showing cached thumbnails only")
             return
         }
         folder = url
+        folderOpening += 1
     }
 
     /// Closes the folder and wakes up everyone still waiting (with no image).
     func stop() {
         isStopped = true
+        closeFolder()
+        resumeIdleWaiters()
+    }
+
+    /// The disk was unplugged or the folder moved (F9): gives the folder back and drops the queue, so
+    /// nothing keeps trying to read it. Cached thumbnails are still served; `open` starts again.
+    func closeFolder() {
         folder?.stopAccessingSecurityScopedResource()
         folder = nil
         queue.removeAll()
@@ -79,7 +90,9 @@ final class ThumbnailLoader {
             continuation.resume(returning: nil)
         }
         waiters.removeAll()
-        resumeIdleWaiters()
+        if runningIds.isEmpty {
+            resumeIdleWaiters()
+        }
     }
 
     // MARK: - Thumbnails
@@ -175,22 +188,31 @@ final class ThumbnailLoader {
             if busySince == nil { busySince = .now }
             // `Task { }` starts async work without waiting for it (like calling an async function
             // without `await` in JavaScript). It inherits `@MainActor`, so `finish` runs on the main thread.
-            Task { [folder, cache] in
-                let image = await Self.generate(request, folder: folder, cache: cache)
-                // Without a folder (disk unplugged) the photo is not unreadable: it may be retried later.
-                finish(request, image: image, isUnreadable: image == nil && folder != nil)
+            Task { [folder, cache, folderOpening] in
+                let outcome = await Self.generate(request, folder: folder, cache: cache)
+                finish(request, outcome: outcome, folderOpening: folderOpening)
             }
         }
     }
 
-    private func finish(_ request: ThumbnailRequest, image: CGImage?, isUnreadable: Bool) {
+    private func finish(_ request: ThumbnailRequest, outcome: GenerationOutcome, folderOpening: Int) {
         let photoId = request.photoId
         runningIds.remove(photoId)
-        if let image {
-            remember(image, for: photoId)
+        var image: CGImage?
+        switch outcome {
+        case .image(let generated):
+            image = generated
+            remember(generated, for: photoId)
             generatedCount += 1
-        } else if isUnreadable {
+        case .unreadable:
             failedIds.insert(photoId)
+        case .folderUnreachable:
+            // Not the photo's fault: it is retried once the disk is back. The rest of the queue would
+            // fail the same way, so the folder is closed until `open` is called again.
+            if folder != nil, folderOpening == self.folderOpening {
+                Self.logger.notice("Gallery folder went away: showing cached thumbnails only")
+                closeFolder()
+            }
         }
         for continuation in waiters.removeValue(forKey: photoId) ?? [] {
             continuation.resume(returning: image)
@@ -233,11 +255,21 @@ final class ThumbnailLoader {
         cache.missing(among: photoIds)
     }
 
+    /// Result of one generation. A Swift `enum` can carry a value per case (here the image), like a
+    /// TypeScript union `{ kind: "image", image } | { kind: "unreadable" } | …`.
+    private enum GenerationOutcome: Sendable {
+        case image(CGImage)
+        /// The file is there but cannot be read: not retried while this gallery is shown.
+        case unreadable
+        /// No folder, or it disappeared during the read (disk unplugged, F9).
+        case folderUnreachable
+    }
+
     /// Disk cache first (another worker may have made it), then the photo file.
     @concurrent
-    private nonisolated static func generate(_ request: ThumbnailRequest, folder: URL?, cache: ThumbnailCache) async -> CGImage? {
-        if let cached = cache.image(for: request.photoId) { return cached }
-        guard let folder else { return nil }
+    private nonisolated static func generate(_ request: ThumbnailRequest, folder: URL?, cache: ThumbnailCache) async -> GenerationOutcome {
+        if let cached = cache.image(for: request.photoId) { return .image(cached) }
+        guard let folder else { return .folderUnreachable }
         do {
             let url = folder.appending(path: request.relativePath)
             let image = switch MediaKind(relativePath: request.relativePath) {
@@ -245,10 +277,12 @@ final class ThumbnailLoader {
             case .photo, .unknown: try ThumbnailGenerator.makeThumbnail(from: url)
             }
             try cache.store(image, for: request.photoId)
-            return image
+            return .image(image)
         } catch {
+            // A read failing because the disk was just pulled out is not an error of this photo.
+            guard FileManager.default.fileExists(atPath: folder.path) else { return .folderUnreachable }
             logger.error("Thumbnail failed for \(request.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
+            return .unreadable
         }
     }
 

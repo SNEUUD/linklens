@@ -12,6 +12,7 @@ struct LinkLensApp: App {
     @State private var cardImportController: CardImportController
     @State private var cardMonitor: CardMonitor
     @State private var duplicatesController: DuplicatesController
+    @State private var availabilityMonitor: GalleryAvailabilityMonitor
 
     init() {
         do {
@@ -31,7 +32,14 @@ struct LinkLensApp: App {
             folderImport.selectedGalleryId = galleryId
             culling.cull(galleryId: galleryId)
         })
-        _duplicatesController = State(initialValue: DuplicatesController(store: store))
+        // F9: which galleries have their disk plugged in. When a disk comes back, the galleries that
+        // could not be sorted while it was away are sorted now (only those never sorted).
+        let availability = GalleryAvailabilityMonitor(store: store)
+        availability.onGalleriesBecameAvailable = { _ in culling.cullPendingGalleries() }
+        _availabilityMonitor = State(initialValue: availability)
+        let duplicates = DuplicatesController(store: store)
+        duplicates.galleryAvailability = { availability.availability(of: $0) }
+        _duplicatesController = State(initialValue: duplicates)
         let monitor = CardMonitor()
         _cardMonitor = State(initialValue: monitor)
         // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch, and
@@ -40,6 +48,7 @@ struct LinkLensApp: App {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             culling.cullPendingGalleries()
             monitor.start()
+            availability.start()
         }
     }
 
@@ -52,6 +61,7 @@ struct LinkLensApp: App {
                 .environment(cardImportController)
                 .environment(cardMonitor)
                 .environment(duplicatesController)
+                .environment(availabilityMonitor)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)

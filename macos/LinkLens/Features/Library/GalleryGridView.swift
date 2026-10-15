@@ -7,6 +7,8 @@ struct GalleryGridView: View {
     let rows: [DisplayedPhoto]
     let loader: ThumbnailLoader
     let browser: GalleryBrowser
+    /// False while the disk is unplugged (F9); when it turns true, cells without a thumbnail ask again.
+    var canUseOriginals = true
     // `@FocusState` tracks whether this view has the keyboard focus (like `document.activeElement`).
     @FocusState private var isFocused: Bool
 
@@ -29,6 +31,7 @@ struct GalleryGridView: View {
                                 photo: photo,
                                 burst: row.entry.burst,
                                 loader: loader,
+                                canUseOriginals: canUseOriginals,
                                 isSelected: photo.id == browser.selection,
                                 onToggleBurst: { number in
                                     browser.selection = photo.id
@@ -83,6 +86,7 @@ private struct ThumbnailCell: View {
     let photo: Photo
     let burst: BurstPlacement?
     let loader: ThumbnailLoader
+    let canUseOriginals: Bool
     let isSelected: Bool
     /// Opens or closes the burst of this photo (receives its number).
     let onToggleBurst: (Int) -> Void
@@ -173,7 +177,8 @@ private struct ThumbnailCell: View {
         }
         // `.task(id:)` runs async work when the cell appears and cancels it when it scrolls away,
         // like a `useEffect` with `[photo.id]` as dependencies and an abort on cleanup.
-        .task(id: photo.id) {
+        // Runs again when the disk comes back (F9), for the photos that had no cached thumbnail yet.
+        .task(id: CellTaskKey(photoId: photo.id, canUseOriginals: canUseOriginals)) {
             if let cached = loader.cachedThumbnail(for: photo.id) {
                 loadedImage = cached
             } else {
@@ -181,6 +186,11 @@ private struct ThumbnailCell: View {
             }
         }
     }
+}
+
+private struct CellTaskKey: Hashable {
+    var photoId: UUID
+    var canUseOriginals: Bool
 }
 
 extension ThumbnailCell {

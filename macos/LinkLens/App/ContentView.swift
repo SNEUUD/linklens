@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(CardImportController.self) private var cardImportController
     @Environment(CardMonitor.self) private var cardMonitor
     @Environment(DuplicatesController.self) private var duplicatesController
+    @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
     @Query(sort: \Gallery.createdAt, order: .reverse) private var galleries: [Gallery]
     @State private var isDuplicatesSheetPresented = false
 
@@ -90,7 +91,10 @@ struct ContentView: View {
         .sheet(isPresented: $isDuplicatesSheetPresented) {
             DuplicatesSheet()
                 .environment(duplicatesController)
+                .environment(availabilityMonitor)
         }
+        // A gallery added (or removed): its disk is checked, and its name remembered (F9).
+        .onChange(of: galleries.map(\.id)) { availabilityMonitor.refresh() }
         .sheet(isPresented: Binding(
             get: { cardImportController.isSheetPresented },
             set: { if !$0 { cardImportController.close() } }
@@ -138,6 +142,7 @@ struct ContentView: View {
         .environment(CardImportController(importer: CardImporter(store: store)))
         .environment(CardMonitor())
         .environment(DuplicatesController(store: store))
+        .environment(GalleryAvailabilityMonitor(store: store))
         .modelContainer(container)
 }
 

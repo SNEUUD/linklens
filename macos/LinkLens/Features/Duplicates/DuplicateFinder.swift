@@ -8,6 +8,9 @@ struct GalleryLocation: Sendable, Equatable {
     var createdAt: Date
     var folderBookmark: Data
     var writeBookmark: Data?
+    /// Disk of the folder, as remembered while it was mounted (F9).
+    var volumeName: String? = nil
+    var volumeUUID: String? = nil
 }
 
 /// One file of the catalogue (photo or video), as a `Sendable` copy read by `LibraryStore`.

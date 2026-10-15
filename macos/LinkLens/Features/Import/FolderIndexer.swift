@@ -53,7 +53,8 @@ struct FolderIndexer: Sendable {
         let galleryId = try await store.createGallery(
             name: folder.lastPathComponent,
             folderPath: folderPath,
-            folderBookmark: bookmark
+            folderBookmark: bookmark,
+            volume: VolumeIdentity.of(folder)
         )
         do {
             await onProgress(IndexingProgress(galleryId: galleryId, completed: 0, total: files.count))

@@ -17,8 +17,10 @@ actor LibraryStore {
         return try modelContext.fetch(descriptor).first?.id
     }
 
-    func createGallery(name: String, folderPath: String, folderBookmark: Data) throws -> UUID {
+    func createGallery(name: String, folderPath: String, folderBookmark: Data, volume: VolumeIdentity? = nil) throws -> UUID {
         let gallery = Gallery(name: name, folderPath: folderPath, folderBookmark: folderBookmark)
+        gallery.volumeName = volume?.name
+        gallery.volumeUUID = volume?.uuid
         modelContext.insert(gallery)
         try modelContext.save()
         return gallery.id
@@ -149,6 +151,30 @@ actor LibraryStore {
         try modelContext.save()
     }
 
+    // MARK: - Availability (F9)
+
+    /// Saves what an availability check learnt: the disk's name, and a fresh bookmark when the folder
+    /// was moved or renamed. Checks with nothing new are skipped.
+    func saveAvailabilityChecks(_ checks: [AvailabilityCheck]) throws {
+        let changed = checks.filter { $0.volume != nil || $0.refreshedBookmark != nil }
+        guard !changed.isEmpty else { return }
+        let ids = changed.map(\.galleryId)
+        let galleries = try modelContext.fetch(FetchDescriptor<Gallery>(predicate: #Predicate { ids.contains($0.id) }))
+        let galleriesById = Dictionary(uniqueKeysWithValues: galleries.map { ($0.id, $0) })
+        for check in changed {
+            guard let gallery = galleriesById[check.galleryId] else { continue }
+            if let volume = check.volume {
+                gallery.volumeName = volume.name
+                gallery.volumeUUID = volume.uuid
+            }
+            if let bookmark = check.refreshedBookmark, let path = check.refreshedFolderPath {
+                gallery.folderBookmark = bookmark
+                gallery.folderPath = path
+            }
+        }
+        try modelContext.save()
+    }
+
     /// Removes photos whose file went to the trash. Returns what is needed to put them back.
     func removePhotos(ids: [UUID]) throws -> [PhotoSnapshot] {
         let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) }))
@@ -193,7 +219,8 @@ extension Gallery {
     var location: GalleryLocation {
         GalleryLocation(
             id: id, name: name, folderPath: folderPath, createdAt: createdAt,
-            folderBookmark: folderBookmark, writeBookmark: writeBookmark
+            folderBookmark: folderBookmark, writeBookmark: writeBookmark,
+            volumeName: volumeName, volumeUUID: volumeUUID
         )
     }
 }

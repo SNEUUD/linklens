@@ -27,6 +27,7 @@ struct GalleryDetailView: View {
     let gallery: Gallery
     @Environment(CullingController.self) private var cullingController
     @Environment(ExportController.self) private var exportController
+    @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
     @Query private var photos: [Photo]
     // `@AppStorage` is a `@State` saved in the user defaults (like `useState` backed by `localStorage`).
     @AppStorage("galleryLayout") private var layout = GalleryLayout.grid
@@ -47,11 +48,22 @@ struct GalleryDetailView: View {
         )
     }
 
+    /// Whether the original files can be read now (F9). Without them, everything still shows from
+    /// the cached thumbnails and only export, sorting and "Afficher dans le Finder" wait.
+    private var availability: GalleryAvailability {
+        availabilityMonitor.availability(of: gallery.id)
+    }
+
     var body: some View {
         content
         // `safeAreaInset` pins a bar above the photos, which scroll under it.
         .safeAreaInset(edge: .top, spacing: 0) {
-            CullingStatusBar(gallery: gallery, photos: photos)
+            VStack(spacing: 0) {
+                if !availability.canUseOriginals {
+                    UnavailableGalleryBar(availability: availability)
+                }
+                CullingStatusBar(gallery: gallery, photos: photos)
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ExportStatusBar(galleryId: gallery.id)
@@ -71,24 +83,33 @@ struct GalleryDetailView: View {
             ) {
                 cullingController.cull(galleryId: gallery.id)
             }
-            .disabled(cullingController.isBusy(galleryId: gallery.id))
-            .help("Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
+            .disabled(cullingController.isBusy(galleryId: gallery.id) || !availability.canUseOriginals)
+            .help(availability.help(for: .cull)
+                ?? String(localized: "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé."))
             Button("Exporter…", systemImage: "square.and.arrow.up") {
                 isExportSheetPresented = true
             }
             .keyboardShortcut("e")
-            .disabled(photos.isEmpty || exportController.isExporting)
-            .help("Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés.")
+            .disabled(photos.isEmpty || exportController.isExporting || !availability.canUseOriginals)
+            .help(availability.help(for: .export)
+                ?? String(localized: "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés."))
             Button("Afficher dans le Finder", systemImage: "folder", action: revealInFinder)
+                .disabled(!availability.canUseOriginals)
+                .help(availability.help(for: .reveal) ?? String(localized: "Afficher le dossier de la galerie dans le Finder"))
         }
         // `.sheet` shows a modal attached to the window while the Boolean is true (like `<Modal open={…}>`).
         .sheet(isPresented: $isExportSheetPresented) {
             ExportSheet(gallery: gallery, photos: photos, selectedPhotoId: browser.selection)
         }
-        // Opens the folder (read only) and queues the missing thumbnails; again when photos are added.
-        .task(id: photos.count) {
-            loader.open(folderBookmark: gallery.folderBookmark)
-            await loader.prefetch(photos.map(\.thumbnailRequest))
+        // Opens the folder (read only) and queues the missing thumbnails; again when photos are added
+        // and when the disk comes back. When it goes away, the folder is let go: cached thumbnails only.
+        .task(id: ThumbnailTaskKey(photoCount: photos.count, canUseOriginals: availability.canUseOriginals)) {
+            if availability.canUseOriginals {
+                loader.open(folderBookmark: gallery.folderBookmark)
+                await loader.prefetch(photos.map(\.thumbnailRequest))
+            } else {
+                loader.closeFolder()
+            }
         }
         .onDisappear { loader.stop() }
         // Again after a sorting: the bursts are stored on the photos.
@@ -121,11 +142,11 @@ struct GalleryDetailView: View {
     @ViewBuilder private var content: some View {
         let rows = rows
         if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
-            PhotoViewer(rows: rows, index: index, loader: loader, browser: browser)
+            PhotoViewer(rows: rows, index: index, loader: loader, browser: browser, availability: availability)
         } else {
             switch layout {
             case .grid:
-                GalleryGridView(rows: rows, loader: loader, browser: browser)
+                GalleryGridView(rows: rows, loader: loader, browser: browser, canUseOriginals: availability.canUseOriginals)
             case .table:
                 GalleryTableView(rows: rows, browser: browser)
             }
@@ -157,6 +178,53 @@ struct GalleryDetailView: View {
             NSWorkspace.shared.activateFileViewerSelecting([folder])
         } catch {
             revealError = error.localizedDescription
+        }
+    }
+}
+
+/// What the thumbnails task depends on: it runs again when one of them changes.
+/// `Hashable` lets SwiftUI compare two keys, like the dependency array of a `useEffect`.
+private struct ThumbnailTaskKey: Hashable {
+    var photoCount: Int
+    var canUseOriginals: Bool
+}
+
+/// Above the photos when the originals are out of reach (F9): « Disque « Photos 2TB » non connecté ».
+struct UnavailableGalleryBar: View {
+    let availability: GalleryAvailability
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: availability.systemImage)
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(availability.message ?? "")
+                        .font(.headline)
+                    if let advice = availability.advice {
+                        Text(advice)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+            Divider()
+        }
+        .background(Color.orange.opacity(0.12))
+    }
+}
+
+extension GalleryAvailability {
+    var systemImage: String {
+        switch self {
+        case .available: "externaldrive"
+        case .diskDisconnected: "externaldrive.badge.xmark"
+        case .folderMissing: "questionmark.folder"
         }
     }
 }

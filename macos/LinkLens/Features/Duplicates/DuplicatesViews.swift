@@ -198,6 +198,13 @@ private struct DuplicateGroupRow: View {
                 ForEach(group.copies) { copy in
                     CopyRow(group: group, copy: copy)
                 }
+                // F9: the kept copy must be read again before the others move.
+                if let kept = group.copies.first(where: { $0.photoId == controller.keptPhotoId(in: group) }),
+                   let message = controller.availability(of: kept).message {
+                    Label("Copie gardée hors d'atteinte (\(message)) : rien ne sera déplacé dans ce groupe.", systemImage: "externaldrive.badge.xmark")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
             }
             .opacity(controller.isIncluded(group) ? 1 : 0.5)
         }
@@ -231,6 +238,11 @@ private struct CopyRow: View {
                 if isKept {
                     Text(controller.keepsProposal(in: group) ? "Gardée · \(group.proposal.reason.label)" : "Gardée · votre choix")
                         .foregroundStyle(.green)
+                } else if let message = controller.availability(of: copy).message {
+                    // F9: nothing on an unplugged disk is moved.
+                    Label("Laissée en place · \(message)", systemImage: "externaldrive.badge.xmark")
+                        .foregroundStyle(.orange)
+                        .help(controller.availability(of: copy).help(for: .trash) ?? "")
                 } else if isIncluded {
                     Label("Corbeille", systemImage: "trash")
                         .foregroundStyle(.secondary)
