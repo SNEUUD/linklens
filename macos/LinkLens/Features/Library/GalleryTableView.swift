@@ -2,10 +2,12 @@ import SwiftUI
 
 /// The photos of a gallery as a table: file, verdict, burst, reason, shot date, dimensions, size.
 /// A collapsed burst is one row (its best photo); the chevron of the "Rafale" column or S opens it (F4).
+/// P / U / X sort the selected photo by hand and go to the next row; A goes back to the AI's proposal.
 struct GalleryTableView: View {
     let rows: [DisplayedPhoto]
     // `@Bindable` gives two-way bindings (`$browser.selection`) to an `@Observable` object.
     @Bindable var browser: GalleryBrowser
+    let sorter: ManualSorter
 
     var body: some View {
         Table(rows, selection: $browser.selection) {
@@ -16,10 +18,15 @@ struct GalleryTableView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(row.photo.relativePath)
+                    // VoiceOver lists these in the actions of the row's first cell.
+                    .accessibilityActions {
+                        SortingButtons { command in sorter.apply(command, to: [row.photo.id]) }
+                    }
             }
             .width(min: 115, ideal: 120, max: 160)
             TableColumn("Tri") { row in
-                VerdictBadge(verdict: row.photo.cullingVerdict)
+                VerdictBadge(verdict: row.photo.verdict, isChosenByUser: row.photo.isVerdictChosenByUser)
+                    .help(row.photo.verdictDescription ?? "")
             }
             .width(min: 80, ideal: 85, max: 100)
             TableColumn("Rafale") { row in
@@ -54,8 +61,11 @@ struct GalleryTableView: View {
             }
             .width(min: 60, ideal: 65, max: 75)
         }
-        // No context menu yet: only the "primary action" (double-click or Return) opens the viewer.
-        .contextMenu(forSelectionType: UUID.self) { _ in
+        // Right-click: sort the clicked row by hand. Double-click or Return open the viewer.
+        .contextMenu(forSelectionType: UUID.self) { ids in
+            if !ids.isEmpty {
+                SortingButtons(showsKeys: true) { command in sorter.apply(command, to: Array(ids)) }
+            }
         } primaryAction: { ids in
             if let id = ids.first { browser.openViewer(on: id) }
         }
@@ -64,6 +74,10 @@ struct GalleryTableView: View {
         }
         .onKeyPress(characters: CharacterSet(charactersIn: "sS"), phases: .down) { _ in
             browser.toggleSelectedBurst() ? .handled : .ignored
+        }
+        .onKeyPress(characters: SortingCommand.keyCharacters, phases: .down) { press in
+            guard let command = SortingCommand(press) else { return .ignored }
+            return sorter.applyToSelection(command, advance: true) ? .handled : .ignored
         }
     }
 }
@@ -95,21 +109,27 @@ private struct BurstCell: View {
     }
 }
 
-/// Main reason, a star for the best photo of a burst, and every reason in the tooltip.
+/// Main reason of the AI, a star for the best photo of a burst, and every reason in the tooltip.
+/// When the user overruled the AI, the reason says what the AI proposed: « IA : Rejeter · Photo floue ».
 private struct ReasonCell: View {
     let photo: Photo
 
     var body: some View {
         let messages = photo.cullingReasons.map { $0.message() }
+        let overruled = photo.isVerdictChosenByUser && photo.cullingVerdict != nil && photo.cullingVerdict != photo.verdict
         HStack(spacing: 4) {
             if photo.isBestOfBurst {
                 Image(systemName: "star.fill")
                     .foregroundStyle(.yellow)
                     .accessibilityLabel("Meilleure photo de la rafale")
             }
+            if overruled, let proposal = photo.cullingVerdict {
+                Text("IA : \(proposal.label) ·")
+                    .foregroundStyle(.secondary)
+            }
             Text(verbatim: messages.first ?? "")
                 .lineLimit(1)
-                .foregroundStyle(photo.cullingVerdict == .keep ? .secondary : .primary)
+                .foregroundStyle(photo.verdict == .keep || overruled ? .secondary : .primary)
         }
         .help(messages.joined(separator: "\n"))
     }

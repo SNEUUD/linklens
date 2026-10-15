@@ -64,6 +64,16 @@ final class GalleryBrowser {
         rebuildEntries()
     }
 
+    /// Selects a photo, or the stack of its burst when the burst is collapsed (e.g. after ⌘Z).
+    func reveal(_ photoId: UUID) {
+        if photoIds.contains(photoId) {
+            selection = photoId
+        } else if let number = photos.first(where: { $0.id == photoId })?.burstNumber,
+                  let stack = entries.first(where: { $0.burst?.number == number }) {
+            selection = stack.photoId
+        }
+    }
+
     /// Arrow key in the grid. With no selection, selects the first photo.
     func move(_ direction: GridLayout.Direction) {
         guard let next = GridLayout.index(moving: direction, from: selectedIndex, count: photoIds.count, columns: columnCount) else {

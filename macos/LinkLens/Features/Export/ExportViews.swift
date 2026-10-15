@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Which photos of the gallery are exported.
 enum ExportScope: String, CaseIterable, Identifiable {
-    /// Default: the photos the AI sorting proposes to keep.
+    /// Default: the photos sorted « Garder » (by the user, otherwise by the AI). « À revoir » is not included.
     case keep
     case all
     case selection
@@ -11,12 +11,12 @@ enum ExportScope: String, CaseIterable, Identifiable {
 
     /// "Garder" when the gallery has such photos, otherwise everything.
     static func defaultScope(for photos: [Photo]) -> ExportScope {
-        photos.contains { $0.cullingVerdict == .keep } ? .keep : .all
+        photos.contains { $0.verdict == .keep } ? .keep : .all
     }
 
     func photos(from photos: [Photo], selectedPhotoId: UUID?) -> [Photo] {
         switch self {
-        case .keep: photos.filter { $0.cullingVerdict == .keep }
+        case .keep: photos.filter { $0.verdict == .keep }
         case .all: photos
         case .selection: photos.filter { $0.id == selectedPhotoId }
         }
@@ -112,7 +112,7 @@ struct ExportSheet: View {
     private var availableScopes: [ExportScope] {
         ExportScope.allCases.filter { scope in
             switch scope {
-            case .keep: photos.contains { $0.cullingVerdict == .keep }
+            case .keep: photos.contains { $0.verdict == .keep }
             case .all: true
             case .selection: selectedPhotoId.map { id in photos.contains { $0.id == id } } ?? false
             }

@@ -3,10 +3,12 @@ import SwiftUI
 /// The photos of a gallery as a grid of thumbnails, with the AI verdict on each one.
 /// Arrows move the selection; space, Return or a double-click open the viewer.
 /// A burst is a stack showing its best photo: S or its badge open and close it (F4).
+/// P / U / X sort the selected photo by hand and go to the next one; A goes back to the AI's proposal.
 struct GalleryGridView: View {
     let rows: [DisplayedPhoto]
     let loader: ThumbnailLoader
     let browser: GalleryBrowser
+    let sorter: ManualSorter
     /// False while the disk is unplugged (F9); when it turns true, cells without a thumbnail ask again.
     var canUseOriginals = true
     // `@FocusState` tracks whether this view has the keyboard focus (like `document.activeElement`).
@@ -37,6 +39,10 @@ struct GalleryGridView: View {
                                     browser.selection = photo.id
                                     browser.toggleBurst(number)
                                     isFocused = true
+                                },
+                                onSort: { command in
+                                    browser.selection = photo.id
+                                    sorter.apply(command, to: [photo.id])
                                 }
                             )
                                 .id(photo.id)
@@ -76,6 +82,11 @@ struct GalleryGridView: View {
         .onKeyPress(characters: CharacterSet(charactersIn: "sS"), phases: .down) { _ in
             browser.toggleSelectedBurst() ? .handled : .ignored
         }
+        // Manual sorting. `.down` only: holding X does not reject photo after photo.
+        .onKeyPress(characters: SortingCommand.keyCharacters, phases: .down) { press in
+            guard let command = SortingCommand(press) else { return .ignored }
+            return sorter.applyToSelection(command, advance: true) ? .handled : .ignored
+        }
         .task { isFocused = true }
     }
 }
@@ -90,6 +101,8 @@ private struct ThumbnailCell: View {
     let isSelected: Bool
     /// Opens or closes the burst of this photo (receives its number).
     let onToggleBurst: (Int) -> Void
+    /// Sorts this photo by hand (context menu, VoiceOver actions).
+    let onSort: (SortingCommand) -> Void
     // Local state of the cell, like `useState`: the image once loaded.
     @State private var loadedImage: CGImage?
 
@@ -143,8 +156,8 @@ private struct ThumbnailCell: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if let verdict = photo.cullingVerdict {
-                    VerdictMark(verdict: verdict).padding(5)
+                if let verdict = photo.verdict {
+                    VerdictMark(verdict: verdict, isChosenByUser: photo.isVerdictChosenByUser).padding(5)
                 }
             }
 
@@ -162,15 +175,19 @@ private struct ThumbnailCell: View {
             }
         }
         .contentShape(Rectangle())
-        // Tooltip on hover: the verdict and every reason.
-        .help(([photo.cullingVerdict?.label].compactMap { $0 } + messages).joined(separator: "\n"))
+        // Tooltip on hover: the verdict (and who chose it) and every reason of the AI.
+        .help(([photo.verdictDescription].compactMap { $0 } + messages).joined(separator: "\n"))
+        .contextMenu {
+            SortingButtons(showsKeys: true, action: onSort)
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: ([photo.relativePath, photo.mediaKind == .video ? String(localized: "Vidéo") : nil, photo.cullingVerdict?.label, burst?.accessibilityDescription, messages.first]
+        .accessibilityLabel(Text(verbatim: ([photo.relativePath, photo.mediaKind == .video ? String(localized: "Vidéo") : nil, photo.verdictDescription, burst?.accessibilityDescription, messages.first]
                 .compactMap { $0 })
                 .joined(separator: ", ")))
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
         // VoiceOver lists this action on the cell (actions menu), since the badge is hidden inside it.
         .accessibilityActions {
+            SortingButtons(action: onSort)
             if let burst {
                 Button(burst.isExpanded ? "Replier la rafale" : "Voir toute la rafale") { onToggleBurst(burst.number) }
             }

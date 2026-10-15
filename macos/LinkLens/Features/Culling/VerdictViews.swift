@@ -22,17 +22,28 @@ extension CullingVerdict {
 }
 
 /// Verdict as a coloured dot and a word (the word keeps it readable without colours and for VoiceOver).
+/// A verdict chosen by the user gets a person symbol, so it never looks like the AI's proposal.
 struct VerdictBadge: View {
     let verdict: CullingVerdict?
+    var isChosenByUser = false
 
     var body: some View {
         if let verdict {
-            Label {
-                Text(verdict.label)
-            } icon: {
-                Circle()
-                    .fill(verdict.color)
-                    .frame(width: 8, height: 8)
+            HStack(spacing: 4) {
+                Label {
+                    Text(verdict.label)
+                } icon: {
+                    Circle()
+                        .fill(verdict.color)
+                        .frame(width: 8, height: 8)
+                }
+                if isChosenByUser {
+                    Image(systemName: "person.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .help("Votre choix")
+                        .accessibilityLabel("votre choix")
+                }
             }
         } else {
             Text(verbatim: "—")
@@ -42,18 +53,43 @@ struct VerdictBadge: View {
     }
 }
 
-/// Compact verdict drawn over a thumbnail: a coloured disc with a symbol.
+/// Compact verdict drawn over a thumbnail: a coloured disc with a symbol for the AI's proposal,
+/// a wider capsule with a person symbol for the user's own choice.
 struct VerdictMark: View {
     let verdict: CullingVerdict
+    var isChosenByUser = false
 
     var body: some View {
-        Image(systemName: verdict.symbolName)
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(verdict.color, in: Circle())
-            .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1))
-            .shadow(color: .black.opacity(0.4), radius: 2)
+        HStack(spacing: 3) {
+            Image(systemName: verdict.symbolName)
+            if isChosenByUser {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 9, weight: .bold))
+            }
+        }
+        .font(.system(size: 10, weight: .bold))
+        .foregroundStyle(.white)
+        .frame(minWidth: 20, minHeight: 20)
+        .padding(.horizontal, isChosenByUser ? 5 : 0)
+        .background(verdict.color, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.8), lineWidth: isChosenByUser ? 1.5 : 1))
+        .shadow(color: .black.opacity(0.4), radius: 2)
+    }
+}
+
+/// Garder / À revoir / Rejeter / Proposition de l'IA, for context menus and VoiceOver actions.
+struct SortingButtons: View {
+    /// Adds the key to each title (« Garder (P) »), for menus; VoiceOver actions go without.
+    var showsKeys = false
+    let action: (SortingCommand) -> Void
+
+    var body: some View {
+        // `ForEach` over plain values needs an id for each one (like the `key` prop in a React list).
+        ForEach(SortingCommand.all, id: \.self) { command in
+            Button(showsKeys ? "\(command.title) (\(command.key))" : command.title) {
+                action(command)
+            }
+        }
     }
 }
 

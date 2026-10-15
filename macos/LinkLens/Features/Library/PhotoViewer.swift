@@ -2,13 +2,15 @@ import SwiftUI
 
 /// Large view of the selected photo, with the AI verdict and all its reasons.
 /// ← → go to the previous / next shown photo (a collapsed burst counts as one); S opens or closes
-/// the burst; space or Escape go back.
+/// the burst; space or Escape go back. P / U / X sort the photo by hand and show the next one;
+/// A goes back to the AI's proposal.
 struct PhotoViewer: View {
     let rows: [DisplayedPhoto]
     /// Index of the photo shown in `rows`.
     let index: Int
     let loader: ThumbnailLoader
     let browser: GalleryBrowser
+    let sorter: ManualSorter
     /// Disk unplugged (F9): the largest image in memory or in the cache is shown, with a notice.
     var availability: GalleryAvailability = .available
     @State private var preview: LoadedImage?
@@ -26,7 +28,9 @@ struct PhotoViewer: View {
         VStack(spacing: 0) {
             imageArea(for: photo)
             Divider()
-            PhotoInfoPanel(photo: photo, burst: rows[index].entry.burst, position: index + 1, total: rows.count)
+            PhotoInfoPanel(photo: photo, burst: rows[index].entry.burst, position: index + 1, total: rows.count) { command in
+                sorter.apply(command, to: [photo.id])
+            }
         }
         .focusable(interactions: .edit)
         .focused($isFocused)
@@ -48,6 +52,10 @@ struct PhotoViewer: View {
         }
         .onKeyPress(characters: CharacterSet(charactersIn: "sS"), phases: .down) { _ in
             browser.toggleSelectedBurst() ? .handled : .ignored
+        }
+        .onKeyPress(characters: SortingCommand.keyCharacters, phases: .down) { press in
+            guard let command = SortingCommand(press) else { return .ignored }
+            return sorter.applyToSelection(command, advance: true) ? .handled : .ignored
         }
         // Again when the disk comes back (F9): the full preview replaces the cached thumbnail.
         .task(id: LoadKey(photoId: photo.id, canUseOriginals: availability.canUseOriginals)) { await load(photo) }
@@ -137,12 +145,14 @@ struct PhotoViewer: View {
     }
 }
 
-/// Under the image: file, date, position, burst, verdict with the star, and every reason.
+/// Under the image: file, date, position, burst, the verdict with the star, the buttons to sort by hand,
+/// and every reason of the AI (still shown when the user chose another verdict).
 private struct PhotoInfoPanel: View {
     let photo: Photo
     let burst: BurstPlacement?
     let position: Int
     let total: Int
+    let onSort: (SortingCommand) -> Void
 
     var body: some View {
         let messages = photo.cullingReasons.map { $0.message() }
@@ -169,22 +179,70 @@ private struct PhotoInfoPanel: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    VerdictBadge(verdict: photo.cullingVerdict)
+                    VerdictBadge(verdict: photo.verdict, isChosenByUser: photo.isVerdictChosenByUser)
                         .font(.headline)
+                    if photo.isVerdictChosenByUser {
+                        Text("Votre choix")
+                            .foregroundStyle(.secondary)
+                    }
                     if photo.isBestOfBurst {
                         Label("Meilleure photo de la rafale", systemImage: "star.fill")
                             .foregroundStyle(.yellow)
                     }
+                }
+                if photo.isVerdictChosenByUser, let proposal = photo.cullingVerdict {
+                    Text("Proposition de l'IA : \(proposal.label)")
+                        .foregroundStyle(.secondary)
                 }
                 ForEach(Array(messages.enumerated()), id: \.offset) { _, message in
                     Text(verbatim: "• \(message)")
                 }
             }
             Spacer(minLength: 0)
+            SortingControls(photo: photo, onSort: onSort)
         }
         .font(.callout)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.bar)
+    }
+}
+
+/// Three buttons to sort the shown photo by hand, and one to go back to the AI's proposal.
+/// The current verdict is highlighted. A click does not move to the next photo; the keys do.
+private struct SortingControls: View {
+    let photo: Photo
+    let onSort: (SortingCommand) -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            HStack(spacing: 6) {
+                ForEach([CullingVerdict.keep, .review, .reject], id: \.self) { verdict in
+                    verdictButton(verdict, isCurrent: photo.verdict == verdict)
+                }
+            }
+            Button("Revenir à la proposition de l'IA (A)") { onSort(.followAI) }
+                .buttonStyle(.link)
+                .disabled(!photo.isVerdictChosenByUser)
+                .help("Oublier votre choix : le verdict proposé par l'IA s'applique à nouveau")
+        }
+    }
+
+    /// The current verdict is filled with its colour (`.borderedProminent`), the others only outlined.
+    @ViewBuilder
+    private func verdictButton(_ verdict: CullingVerdict, isCurrent: Bool) -> some View {
+        let button = Button {
+            onSort(.choose(verdict))
+        } label: {
+            Label(verdict.label, systemImage: verdict.symbolName)
+        }
+        .tint(verdict.color)
+        .help("\(verdict.label) (\(SortingCommand.choose(verdict).key))")
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        if isCurrent {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
+        }
     }
 }

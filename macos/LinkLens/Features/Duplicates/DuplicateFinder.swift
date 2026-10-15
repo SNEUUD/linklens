@@ -31,7 +31,7 @@ struct DuplicateCopy: Sendable, Equatable, Identifiable {
 
 /// Why a copy is proposed as the one to keep. Only the rule that actually decided is given.
 enum KeepReason: Sendable, Equatable {
-    /// The only copy (or among the only ones) the AI sorting proposed to keep.
+    /// The only copy (or among the only ones) sorted « Garder », by the user or by the AI.
     case sortedKeep
     /// In the gallery created first: usually the original import.
     case oldestGallery

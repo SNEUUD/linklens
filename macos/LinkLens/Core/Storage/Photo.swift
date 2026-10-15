@@ -34,6 +34,10 @@ final class Photo {
     var burstNumber: Int?
     var isBestOfBurst = false
 
+    // Manual sorting. Kept apart from `cullingVerdictRaw`: a new AI sorting never overwrites it.
+    /// Raw value of the `CullingVerdict` chosen by the user, nil when they kept the AI's proposal.
+    var userVerdictRaw: String?
+
     // F5 duplicates.
     /// SHA-256 of the file (hexadecimal): known after a card import (F1), otherwise computed on demand
     /// by the duplicate search, only for files whose size matches another file's.
@@ -61,11 +65,23 @@ extension Photo {
         cullingVerdictRaw.map { CullingVerdict(rawValue: $0) ?? .unknown }
     }
 
+    /// The user's choice, nil when they did not choose (the AI's proposal then applies).
+    var userVerdict: CullingVerdict? {
+        userVerdictRaw.map { CullingVerdict(rawValue: $0) ?? .unknown }
+    }
+
+    /// The verdict shown and used everywhere (counters, export, duplicates): the user's choice,
+    /// otherwise the AI's proposal. `cullingVerdict` alone is only the AI's proposal.
+    var verdict: CullingVerdict? {
+        userVerdict ?? cullingVerdict
+    }
+
     var cullingReasons: [CullingReason] {
         guard let cullingReasonsData else { return [] }
         return (try? JSONDecoder().decode([CullingReason].self, from: cullingReasonsData)) ?? []
     }
 
+    /// Stores the AI's result. `userVerdictRaw` is left alone: a manual choice survives a new sorting.
     func apply(_ result: CullingResult, analyzedAt: Date) throws {
         cullingVerdictRaw = result.verdict.rawValue
         cullingReasonsData = try JSONEncoder().encode(result.reasons)
@@ -96,6 +112,7 @@ struct PhotoSnapshot: Sendable, Equatable {
     var burstNumber: Int?
     var isBestOfBurst: Bool
     var sha256: String?
+    var userVerdictRaw: String? = nil
 }
 
 extension Photo {
@@ -105,7 +122,7 @@ extension Photo {
             pixelWidth: pixelWidth, pixelHeight: pixelHeight, importedAt: importedAt, mediaKindRaw: mediaKindRaw,
             cullingVerdictRaw: cullingVerdictRaw, cullingReasonsData: cullingReasonsData, analyzedAt: analyzedAt,
             sharpness: sharpness, aestheticsScore: aestheticsScore, burstNumber: burstNumber,
-            isBestOfBurst: isBestOfBurst, sha256: sha256
+            isBestOfBurst: isBestOfBurst, sha256: sha256, userVerdictRaw: userVerdictRaw
         )
     }
 
@@ -128,6 +145,7 @@ extension Photo {
         burstNumber = snapshot.burstNumber
         isBestOfBurst = snapshot.isBestOfBurst
         sha256 = snapshot.sha256
+        userVerdictRaw = snapshot.userVerdictRaw
     }
 }
 

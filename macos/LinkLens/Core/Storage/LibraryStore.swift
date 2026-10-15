@@ -112,7 +112,7 @@ actor LibraryStore {
                 files.append(DuplicateCopy(
                     photoId: photo.id, galleryId: gallery.id, galleryName: gallery.name,
                     galleryCreatedAt: gallery.createdAt, relativePath: photo.relativePath,
-                    fileSize: photo.fileSize, sha256: photo.sha256, verdict: photo.cullingVerdict
+                    fileSize: photo.fileSize, sha256: photo.sha256, verdict: photo.verdict
                 ))
             }
         }

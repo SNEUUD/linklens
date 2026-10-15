@@ -28,10 +28,14 @@ struct GalleryDetailView: View {
     @Environment(CullingController.self) private var cullingController
     @Environment(ExportController.self) private var exportController
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.undoManager) private var undoManager
     @Query private var photos: [Photo]
     // `@AppStorage` is a `@State` saved in the user defaults (like `useState` backed by `localStorage`).
     @AppStorage("galleryLayout") private var layout = GalleryLayout.grid
-    @State private var browser = GalleryBrowser()
+    @State private var browser: GalleryBrowser
+    /// Manual sorting (P / U / X / A) with undo, shared by the grid, the table and the viewer.
+    @State private var sorter: ManualSorter
     // `@State` keeps the same loader for the whole life of the view (like `useRef`), one per gallery.
     @State private var loader = ThumbnailLoader()
     @State private var revealError: String?
@@ -39,6 +43,9 @@ struct GalleryDetailView: View {
 
     init(gallery: Gallery) {
         self.gallery = gallery
+        let browser = GalleryBrowser()
+        _browser = State(initialValue: browser)
+        _sorter = State(initialValue: ManualSorter(browser: browser))
         let galleryId = gallery.id
         // `@Query` is the live query of SwiftData (like a `useQuery` hook that re-renders on every save).
         // Its filter depends on the gallery, so it is built here rather than in the property declaration.
@@ -112,6 +119,11 @@ struct GalleryDetailView: View {
             }
         }
         .onDisappear { loader.stop() }
+        // The environment is only known once the view is on screen; the window's undo manager can change.
+        .onChange(of: undoManager, initial: true) {
+            sorter.context = modelContext
+            sorter.undoManager = undoManager
+        }
         // Again after a sorting: the bursts are stored on the photos.
         .onChange(of: photos.map(\.burstInput), initial: true) { _, inputs in browser.setPhotos(inputs) }
         .onChange(of: gallery.culledAt) { browser.collapseAllBursts() }
@@ -142,13 +154,13 @@ struct GalleryDetailView: View {
     @ViewBuilder private var content: some View {
         let rows = rows
         if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
-            PhotoViewer(rows: rows, index: index, loader: loader, browser: browser, availability: availability)
+            PhotoViewer(rows: rows, index: index, loader: loader, browser: browser, sorter: sorter, availability: availability)
         } else {
             switch layout {
             case .grid:
-                GalleryGridView(rows: rows, loader: loader, browser: browser, canUseOriginals: availability.canUseOriginals)
+                GalleryGridView(rows: rows, loader: loader, browser: browser, sorter: sorter, canUseOriginals: availability.canUseOriginals)
             case .table:
-                GalleryTableView(rows: rows, browser: browser)
+                GalleryTableView(rows: rows, browser: browser, sorter: sorter)
             }
         }
     }
@@ -253,10 +265,16 @@ private struct CullingStatusBar: View {
                 Button("Annuler") { cullingController.cancel(galleryId: gallery.id) }
             }
         } else if gallery.culledAt != nil {
+            let counts = VerdictCounts(photos)
             bar {
-                count(of: .keep)
-                count(of: .review)
-                count(of: .reject)
+                count(of: .keep, in: counts)
+                count(of: .review, in: counts)
+                count(of: .reject, in: counts)
+                if counts.chosenByUser > 0 {
+                    Label("Vos choix : \(counts.chosenByUser)", systemImage: "person.fill")
+                        .monospacedDigit()
+                        .help("Photos triées à la main. Un nouveau tri par l'IA ne les change pas.")
+                }
                 let burstCount = Set(photos.compactMap(\.burstNumber)).count
                 if burstCount > 0 {
                     Label("Rafales : \(burstCount)", systemImage: "square.stack")
@@ -264,17 +282,18 @@ private struct CullingStatusBar: View {
                         .help("Chaque rafale est montrée par sa meilleure photo. Touche S : voir toute la rafale ou la replier.")
                 }
                 Spacer()
-                Text("Proposition de l'IA : rien n'est supprimé.")
+                Text("P Garder · U À revoir · X Rejeter · A IA. Rien n'est supprimé.")
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .help("Touches pour trier la photo sélectionnée à la main : P Garder, U À revoir, X Rejeter, A revenir à la proposition de l'IA. ⌘Z annule. « Rejeter » ne supprime aucun fichier.")
             }
         }
     }
 
-    private func count(of verdict: CullingVerdict) -> some View {
-        let total = photos.filter { $0.cullingVerdict == verdict }.count
-        return HStack(spacing: 6) {
+    private func count(of verdict: CullingVerdict, in counts: VerdictCounts) -> some View {
+        HStack(spacing: 6) {
             Circle().fill(verdict.color).frame(width: 8, height: 8)
-            Text(verbatim: "\(verdict.label) : \(total)")
+            Text(verbatim: "\(verdict.label) : \(counts.count(of: verdict))")
                 .monospacedDigit()
         }
     }
