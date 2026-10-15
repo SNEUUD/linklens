@@ -148,10 +148,11 @@ struct DuplicateScannerTests {
 
 struct DuplicateTrasherTests {
     @Test func movesTheCopyToTheTrashAndPutsItBack() async throws {
+        let name = uniqueRawName()
         let (first, second) = try (TestFolder(), TestFolder())
         defer { first.remove(); second.remove() }
-        try first.writeFile("DSC1.ARW", contents: "same picture")
-        try second.writeFile("DSC1.ARW", contents: "same picture")
+        try first.writeFile(name, contents: "same picture")
+        try second.writeFile(name, contents: "same picture")
         try second.writeFile("DSC2.ARW", contents: "not a duplicate")
         let keptBefore = try first.snapshot()
 
@@ -165,7 +166,7 @@ struct DuplicateTrasherTests {
         try await store.saveCulling([CullingResult(photoId: extra.photoId, verdict: .keep, reasons: [])], analyzedAt: Date())
         let galleries = try await store.galleryLocations()
         let trasher = DuplicateTrasher(store: store)
-        let extraURL = second.url.appending(path: "DSC1.ARW")
+        let extraURL = second.url.appending(path: name)
 
         let outcome = try await trasher.moveToTrash(
             [TrashSelection(sha256: group.sha256, keep: keep, trash: [extra])],
@@ -196,23 +197,24 @@ struct DuplicateTrasherTests {
         #expect(!FileManager.default.fileExists(atPath: trashed.trashURL.path))
         context = ModelContext(container)
         let photo = try #require(try context.fetch(FetchDescriptor<Photo>()).first { $0.id == extra.photoId })
-        #expect(photo.relativePath == "DSC1.ARW" && photo.gallery?.id == secondId)
+        #expect(photo.relativePath == name && photo.gallery?.id == secondId)
         #expect(photo.sha256 == group.sha256 && photo.cullingVerdict == .keep, "restored as it was")
         #expect(try context.fetch(FetchDescriptor<Gallery>()).first { $0.id == secondId }?.photoCount == 2)
     }
 
     @Test func nothingMovesWhenTheKeptCopyChanged() async throws {
+        let name = uniqueRawName()
         let (first, second) = try (TestFolder(), TestFolder())
         defer { first.remove(); second.remove() }
-        try first.writeFile("DSC1.ARW", contents: "same picture")
-        try second.writeFile("DSC1.ARW", contents: "same picture")
+        try first.writeFile(name, contents: "same picture")
+        try second.writeFile(name, contents: "same picture")
         let store = LibraryStore(modelContainer: try makeInMemoryContainer())
         _ = try await indexGallery(first, store: store)
         let secondId = try await indexGallery(second, store: store)
         let group = try #require(try await DuplicateScanner(store: store).scan().groups.first)
         let keep = try #require(group.copies.first { $0.galleryId != secondId })
         let extra = try #require(group.copies.first { $0.galleryId == secondId })
-        try first.writeFile("DSC1.ARW", contents: "edited picture") // edited after the search
+        try first.writeFile(name, contents: "edited picture") // edited after the search
         let before = try second.snapshot()
 
         let outcome = try await DuplicateTrasher(store: store).moveToTrash(
@@ -227,10 +229,11 @@ struct DuplicateTrasherTests {
     }
 
     @Test func skipsACopyThatChangedOrCannotBeWritten() async throws {
+        let name = uniqueRawName()
         let (first, second, third) = try (TestFolder(), TestFolder(), TestFolder())
         defer { first.remove(); second.remove(); third.remove() }
         for folder in [first, second, third] {
-            try folder.writeFile("DSC1.ARW", contents: "same picture")
+            try folder.writeFile(name, contents: "same picture")
         }
         let store = LibraryStore(modelContainer: try makeInMemoryContainer())
         let firstId = try await indexGallery(first, store: store)
@@ -238,7 +241,7 @@ struct DuplicateTrasherTests {
         let thirdId = try await indexGallery(third, store: store)
         let group = try #require(try await DuplicateScanner(store: store).scan().groups.first)
         let byGallery = Dictionary(uniqueKeysWithValues: group.copies.map { ($0.galleryId, $0) })
-        try second.writeFile("DSC1.ARW", contents: "SAME PICTURE") // same size, other content
+        try second.writeFile(name, contents: "SAME PICTURE") // same size, other content
         let before = (try second.snapshot(), try third.snapshot())
 
         let outcome = try await DuplicateTrasher(store: store).moveToTrash(
@@ -254,10 +257,11 @@ struct DuplicateTrasherTests {
     }
 
     @Test func undoNeverReplacesAFile() async throws {
+        let name = uniqueRawName()
         let (first, second) = try (TestFolder(), TestFolder())
         defer { first.remove(); second.remove() }
-        try first.writeFile("DSC1.ARW", contents: "same picture")
-        try second.writeFile("DSC1.ARW", contents: "same picture")
+        try first.writeFile(name, contents: "same picture")
+        try second.writeFile(name, contents: "same picture")
         let store = LibraryStore(modelContainer: try makeInMemoryContainer())
         _ = try await indexGallery(first, store: store)
         let secondId = try await indexGallery(second, store: store)
@@ -270,24 +274,56 @@ struct DuplicateTrasherTests {
         )
         let trashed = try #require(outcome.trashed.first)
         defer { try? FileManager.default.removeItem(at: trashed.trashURL) } // test file only
-        try second.writeFile("DSC1.ARW", contents: "a new photo with the same name")
+        try second.writeFile(name, contents: "a new photo with the same name")
 
         let restored = try await trasher.restore(outcome.trashed, galleryNames: [secondId: "B"], writableFolders: [secondId: second.url])
 
         #expect(restored.restored == 0)
-        #expect(restored.skipped == [SkippedFile(galleryName: "B", relativePath: "DSC1.ARW", reason: .nameTaken)])
-        #expect(try String(contentsOf: second.url.appending(path: "DSC1.ARW"), encoding: .utf8) == "a new photo with the same name")
+        #expect(restored.skipped == [SkippedFile(galleryName: "B", relativePath: name, reason: .nameTaken)])
+        #expect(try String(contentsOf: second.url.appending(path: name), encoding: .utf8) == "a new photo with the same name")
         #expect(FileManager.default.fileExists(atPath: trashed.trashURL.path))
+    }
+
+    @Test func undoLeavesAnotherFileFoundAtTheSamePlaceInTheTrash() async throws {
+        let name = uniqueRawName()
+        let (first, second) = try (TestFolder(), TestFolder())
+        defer { first.remove(); second.remove() }
+        try first.writeFile(name, contents: "same picture")
+        try second.writeFile(name, contents: "same picture")
+        let store = LibraryStore(modelContainer: try makeInMemoryContainer())
+        _ = try await indexGallery(first, store: store)
+        let secondId = try await indexGallery(second, store: store)
+        let group = try #require(try await DuplicateScanner(store: store).scan().groups.first)
+        let trasher = DuplicateTrasher(store: store)
+        let outcome = try await trasher.moveToTrash(
+            [TrashSelection(sha256: group.sha256, keep: group.copies[0], trash: [group.copies[1]])],
+            galleries: try await store.galleryLocations(),
+            writableFolders: [secondId: second.url]
+        )
+        let trashed = try #require(outcome.trashed.first)
+        defer { try? FileManager.default.removeItem(at: trashed.trashURL) } // test file only
+        // The trash was emptied, then another file with that name was put in it.
+        let handle = try FileHandle(forWritingTo: trashed.trashURL)
+        try handle.write(contentsOf: Data("SAME PICTURE".utf8))
+        try handle.close()
+
+        let restored = try await trasher.restore(outcome.trashed, galleryNames: [secondId: "B"], writableFolders: [secondId: second.url])
+
+        #expect(restored.restored == 0)
+        #expect(restored.skipped.map(\.reason) == [.notInTrash])
+        #expect(!FileManager.default.fileExists(atPath: second.url.appending(path: name).path))
+        #expect(try String(contentsOf: trashed.trashURL, encoding: .utf8) == "SAME PICTURE")
     }
 }
 
 @MainActor
 struct DuplicatesControllerTests {
     @Test func asksForAccessOnceThenTrashesTheChosenCopyAndUndoes() async throws {
+        let name = uniqueRawName()
         let (first, second) = try (TestFolder(), TestFolder())
         defer { first.remove(); second.remove() }
-        try first.writeFile("DSC1.ARW", contents: "same picture")
-        try second.writeFile("DSC1.ARW", contents: "same picture")
+        try first.writeFile(name, contents: "same picture")
+        try second.writeFile(name, contents: "same picture")
         let container = try makeInMemoryContainer()
         let store = LibraryStore(modelContainer: container)
         let firstId = try await indexGallery(first, store: store)
@@ -307,7 +343,7 @@ struct DuplicatesControllerTests {
         controller.keep(newerCopy.photoId, in: group)
         #expect(!controller.keepsProposal(in: group))
         #expect(controller.selectedCopyCount == 1)
-        let firstFile = first.url.appending(path: "DSC1.ARW")
+        let firstFile = first.url.appending(path: name)
 
         controller.moveSelectionToTrash()
         await controller.waitUntilIdle()
@@ -315,7 +351,7 @@ struct DuplicatesControllerTests {
         #expect(askedFor == [first.url.lastPathComponent])
         #expect(controller.errorMessage == nil)
         #expect(!FileManager.default.fileExists(atPath: firstFile.path))
-        #expect(FileManager.default.fileExists(atPath: second.url.appending(path: "DSC1.ARW").path))
+        #expect(FileManager.default.fileExists(atPath: second.url.appending(path: name).path))
         #expect(controller.lastTrash?.files.count == 1)
         #expect(controller.report?.groups.isEmpty == true)
         let gallery = try #require(try ModelContext(container).fetch(FetchDescriptor<Gallery>()).first { $0.id == firstId })
@@ -332,10 +368,11 @@ struct DuplicatesControllerTests {
     }
 
     @Test func aRefusedFolderLeavesEverythingInPlace() async throws {
+        let name = uniqueRawName()
         let (first, second) = try (TestFolder(), TestFolder())
         defer { first.remove(); second.remove() }
-        try first.writeFile("DSC1.ARW", contents: "same picture")
-        try second.writeFile("DSC1.ARW", contents: "same picture")
+        try first.writeFile(name, contents: "same picture")
+        try second.writeFile(name, contents: "same picture")
         let store = LibraryStore(modelContainer: try makeInMemoryContainer())
         _ = try await indexGallery(first, store: store)
         _ = try await indexGallery(second, store: store)
@@ -378,6 +415,12 @@ struct CardImportFingerprintTests {
 }
 
 // MARK: - Helpers
+
+/// The trash is the user's, shared by every test running at the same time: a file name used once
+/// only, so a test never finds another test's file at "its" place in the trash.
+private func uniqueRawName() -> String {
+    "DSC-\(UUID().uuidString.prefix(8)).ARW"
+}
 
 /// Indexes a test folder as a gallery (F2) and returns its id.
 private func indexGallery(_ folder: TestFolder, store: LibraryStore) async throws -> UUID {

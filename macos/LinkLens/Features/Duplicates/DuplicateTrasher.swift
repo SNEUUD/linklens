@@ -14,6 +14,8 @@ struct TrashedFile: Sendable, Equatable {
     var photo: PhotoSnapshot
     /// Where the Finder put it, as returned by `FileManager.trashItem`.
     var trashURL: URL
+    /// Fingerprint of the file: once the trash is emptied, another file may get the same name there.
+    var sha256: String
 }
 
 /// Why one file was left where it was. Nothing is moved unless every check passes.
@@ -95,7 +97,7 @@ struct DuplicateTrasher: Sendable {
             return folder
         }
 
-        var moved: [(copy: DuplicateCopy, trashURL: URL)] = []
+        var moved: [(copy: DuplicateCopy, trashURL: URL, sha256: String)] = []
         var skipped: [SkippedFile] = []
         for selection in selections {
             func skip(_ copy: DuplicateCopy, _ reason: TrashSkipReason) {
@@ -144,7 +146,7 @@ struct DuplicateTrasher: Sendable {
                     skip(copy, .failed(String(localized: "Mis à la corbeille, mais LinkLens ne pourra pas l'en sortir.")))
                     continue
                 }
-                moved.append((copy, trashURL))
+                moved.append((copy, trashURL, selection.sha256))
             }
         }
 
@@ -153,7 +155,7 @@ struct DuplicateTrasher: Sendable {
         do {
             snapshots = try await store.removePhotos(ids: moved.map(\.copy.photoId))
         } catch {
-            for (copy, trashURL) in moved {
+            for (copy, trashURL, _) in moved {
                 if let folder = writableFolders[copy.galleryId] {
                     try? FileManager.default.moveItem(at: trashURL, to: folder.appending(path: copy.relativePath))
                 }
@@ -161,8 +163,8 @@ struct DuplicateTrasher: Sendable {
             throw error
         }
         let snapshotsById = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.id, $0) })
-        let trashed = moved.compactMap { copy, trashURL in
-            snapshotsById[copy.photoId].map { TrashedFile(galleryId: copy.galleryId, photo: $0, trashURL: trashURL) }
+        let trashed = moved.compactMap { copy, trashURL, sha256 in
+            snapshotsById[copy.photoId].map { TrashedFile(galleryId: copy.galleryId, photo: $0, trashURL: trashURL, sha256: sha256) }
         }
         return TrashOutcome(trashed: trashed, skipped: skipped)
     }
@@ -186,7 +188,10 @@ struct DuplicateTrasher: Sendable {
                 continue
             }
             let destination = folder.appending(path: file.photo.relativePath)
-            guard FileManager.default.fileExists(atPath: file.trashURL.path) else {
+            // Same name is not enough: the trash may have been emptied and another file put there since.
+            guard FileManager.default.fileExists(atPath: file.trashURL.path),
+                  (try? VerifiedCopier.sha256(of: file.trashURL)) == file.sha256
+            else {
                 skip(.notInTrash)
                 continue
             }
