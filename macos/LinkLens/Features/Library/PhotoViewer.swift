@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Large view of the selected photo, with the AI verdict and all its reasons.
 /// ← → go to the previous / next shown photo (a collapsed burst counts as one); S opens or closes
-/// the burst; space or Escape go back. P / U / X sort the photo by hand and show the next one;
-/// A goes back to the AI's proposal.
+/// the burst and B makes the photo its best one; space or Escape go back. P / U / X sort the photo
+/// by hand and show the next one; A goes back to the AI's proposal.
 struct PhotoViewer: View {
     let rows: [DisplayedPhoto]
     /// Index of the photo shown in `rows`.
@@ -28,9 +28,11 @@ struct PhotoViewer: View {
         VStack(spacing: 0) {
             imageArea(for: photo)
             Divider()
-            PhotoInfoPanel(photo: photo, burst: rows[index].entry.burst, position: index + 1, total: rows.count) { command in
-                sorter.apply(command, to: [photo.id])
-            }
+            PhotoInfoPanel(
+                photo: photo, burst: rows[index].entry.burst, position: index + 1, total: rows.count,
+                onSort: { command in sorter.apply(command, to: [photo.id]) },
+                onBurstCover: { command in sorter.apply(command, to: photo.id) }
+            )
         }
         .focusable(interactions: .edit)
         .focused($isFocused)
@@ -56,6 +58,11 @@ struct PhotoViewer: View {
         .onKeyPress(characters: SortingCommand.keyCharacters, phases: .down) { press in
             guard let command = SortingCommand(press) else { return .ignored }
             return sorter.applyToSelection(command, advance: true) ? .handled : .ignored
+        }
+        // B as in "best": the selected photo stands for its burst (F4), even after a new sorting.
+        .onKeyPress(characters: BurstCoverCommand.keyCharacters, phases: .down) { press in
+            guard BurstCoverCommand(press) != nil else { return .ignored }
+            return sorter.chooseSelectedBurstCover() ? .handled : .ignored
         }
         // Again when the disk comes back (F9): the full preview replaces the cached thumbnail.
         .task(id: LoadKey(photoId: photo.id, canUseOriginals: availability.canUseOriginals)) { await load(photo) }
@@ -153,6 +160,7 @@ private struct PhotoInfoPanel: View {
     let position: Int
     let total: Int
     let onSort: (SortingCommand) -> Void
+    let onBurstCover: (BurstCoverCommand) -> Void
 
     var body: some View {
         let messages = photo.cullingReasons.map { $0.message() }
@@ -173,6 +181,8 @@ private struct PhotoInfoPanel: View {
                         : "Rafale \(burst.number) · \(burst.count) photos (S pour toutes les voir)")
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
+                    BurstCoverButtons(burst: burst, showsKeys: true, action: onBurstCover)
+                        .buttonStyle(.link)
                 }
             }
             .frame(minWidth: 200, alignment: .leading)
@@ -185,8 +195,8 @@ private struct PhotoInfoPanel: View {
                         Text("Votre choix")
                             .foregroundStyle(.secondary)
                     }
-                    if photo.isBestOfBurst {
-                        Label("Meilleure photo de la rafale", systemImage: "star.fill")
+                    if let burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
+                        Label(burst.starDescription, systemImage: "star.fill")
                             .foregroundStyle(.yellow)
                     }
                 }

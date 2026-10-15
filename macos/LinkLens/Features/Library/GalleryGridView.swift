@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The photos of a gallery as a grid of thumbnails, with the AI verdict on each one.
 /// Arrows move the selection; space, Return or a double-click open the viewer.
-/// A burst is a stack showing its best photo: S or its badge open and close it (F4).
+/// A burst is a stack showing its best photo: S or its badge open and close it, B chooses its best photo (F4).
 /// P / U / X sort the selected photo by hand and go to the next one; A goes back to the AI's proposal.
 struct GalleryGridView: View {
     let rows: [DisplayedPhoto]
@@ -43,6 +43,10 @@ struct GalleryGridView: View {
                                 onSort: { command in
                                     browser.selection = photo.id
                                     sorter.apply(command, to: [photo.id])
+                                },
+                                onBurstCover: { command in
+                                    browser.selection = photo.id
+                                    sorter.apply(command, to: photo.id)
                                 }
                             )
                                 .id(photo.id)
@@ -87,6 +91,11 @@ struct GalleryGridView: View {
             guard let command = SortingCommand(press) else { return .ignored }
             return sorter.applyToSelection(command, advance: true) ? .handled : .ignored
         }
+        // B as in "best": the selected photo stands for its burst (F4), even after a new sorting.
+        .onKeyPress(characters: BurstCoverCommand.keyCharacters, phases: .down) { press in
+            guard BurstCoverCommand(press) != nil else { return .ignored }
+            return sorter.chooseSelectedBurstCover() ? .handled : .ignored
+        }
         .task { isFocused = true }
     }
 }
@@ -103,6 +112,8 @@ private struct ThumbnailCell: View {
     let onToggleBurst: (Int) -> Void
     /// Sorts this photo by hand (context menu, VoiceOver actions).
     let onSort: (SortingCommand) -> Void
+    /// Chooses this photo as the best of its burst, or goes back to the AI's choice.
+    let onBurstCover: (BurstCoverCommand) -> Void
     // Local state of the cell, like `useState`: the image once loaded.
     @State private var loadedImage: CGImage?
 
@@ -140,8 +151,8 @@ private struct ThumbnailCell: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                if photo.isBestOfBurst {
-                    BestOfBurstStar().padding(5)
+                if let burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
+                    BestOfBurstStar(burst: burst).padding(5)
                 }
             }
             .overlay(alignment: .bottomLeading) {
@@ -179,6 +190,10 @@ private struct ThumbnailCell: View {
         .help(([photo.verdictDescription].compactMap { $0 } + messages).joined(separator: "\n"))
         .contextMenu {
             SortingButtons(showsKeys: true, action: onSort)
+            if let burst {
+                Divider()
+                BurstCoverButtons(burst: burst, showsKeys: true, action: onBurstCover)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: ([photo.relativePath, photo.mediaKind == .video ? String(localized: "Vidéo") : nil, photo.verdictDescription, burst?.accessibilityDescription, messages.first]
@@ -190,6 +205,7 @@ private struct ThumbnailCell: View {
             SortingButtons(action: onSort)
             if let burst {
                 Button(burst.isExpanded ? "Replier la rafale" : "Voir toute la rafale") { onToggleBurst(burst.number) }
+                BurstCoverButtons(burst: burst, action: onBurstCover)
             }
         }
         // `.task(id:)` runs async work when the cell appears and cancels it when it scrolls away,

@@ -65,6 +65,27 @@ enum SortingCommand: Hashable, Sendable {
     var undoActionName: String { title }
 }
 
+/// What the B key, a menu item or a VoiceOver action asks for the best photo of a burst (F4).
+enum BurstCoverCommand: Hashable, Sendable {
+    /// This photo stands for its burst, even after a new sorting.
+    case choose
+    /// Forgets the user's choice in the burst: the AI's best photo stands for it again.
+    case followAI
+
+    /// Key read by the grid, the table and the viewer (both cases, as for P / U / X).
+    static let keyCharacters = CharacterSet(charactersIn: "bB")
+
+    /// B as in "best". Nil for any other key, or with ⌘, ⌥ or ⌃ held.
+    init?(characters: String, modifiers: EventModifiers) {
+        guard modifiers.isDisjoint(with: [.command, .option, .control]), characters.lowercased() == "b" else { return nil }
+        self = .choose
+    }
+
+    init?(_ press: KeyPress) {
+        self.init(characters: press.characters, modifiers: press.modifiers)
+    }
+}
+
 /// Manual sorting: the user's verdict, stored apart from the AI's proposal, with undo and redo.
 ///
 /// One instance per gallery view, shared by the grid, the table and the viewer like `GalleryBrowser`:
@@ -160,6 +181,120 @@ final class ManualSorter {
         if let photoId = changes.first?.photoId {
             browser?.reveal(photoId)
         }
+    }
+
+    // MARK: - Best photo of a burst (F4)
+
+    /// B key: the selected photo becomes the best of its burst. Returns false outside a burst.
+    @discardableResult
+    func chooseSelectedBurstCover() -> Bool {
+        guard let browser, let photoId = browser.selection, browser.selectedEntry?.burst != nil else { return false }
+        chooseBurstCover(photoId)
+        return true
+    }
+
+    /// A menu item or a VoiceOver action on a photo of a burst.
+    @discardableResult
+    func apply(_ command: BurstCoverCommand, to photoId: UUID) -> Bool {
+        switch command {
+        case .choose: chooseBurstCover(photoId)
+        case .followAI: followAIBurstCover(of: photoId)
+        }
+    }
+
+    /// The photo stands for its burst from now on, even after a new sorting. The other photos of the
+    /// burst lose an older choice: one choice per burst. Verdicts are not changed.
+    @discardableResult
+    func chooseBurstCover(_ photoId: UUID, at date: Date = .now) -> Bool {
+        updateBurstCover(of: photoId, actionName: String(localized: "Meilleure de la rafale")) { member in
+            // Already chosen: its date is kept, so B pressed twice adds nothing to the undo history.
+            member.id == photoId ? (member.bestOfBurstChosenAt ?? date) : nil
+        }
+    }
+
+    /// Forgets the user's choice in the burst of this photo: the AI's best photo stands for it again.
+    @discardableResult
+    func followAIBurstCover(of photoId: UUID) -> Bool {
+        updateBurstCover(of: photoId, actionName: String(localized: "Meilleure selon l'IA")) { _ in nil }
+    }
+
+    /// One photo's new value of `bestOfBurstChosenAt`.
+    private struct CoverChange {
+        var photoId: UUID
+        var chosenAt: Date?
+    }
+
+    /// Gives every photo of the burst its new `bestOfBurstChosenAt`, read from `newValue`.
+    private func updateBurstCover(of photoId: UUID, actionName: String, newValue: (Photo) -> Date?) -> Bool {
+        do {
+            let members = try burstMembers(of: photoId)
+            // The photo itself first: undo selects it.
+            let ordered = members.filter { $0.id == photoId } + members.filter { $0.id != photoId }
+            let changes = ordered.map { CoverChange(photoId: $0.id, chosenAt: newValue($0)) }
+            return try saveCovers(changes, actionName: actionName)
+        } catch {
+            Self.logger.error("Burst cover not saved: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    /// Every photo of the same gallery and burst as this one, empty if it is not in a burst.
+    private func burstMembers(of photoId: UUID) throws -> [Photo] {
+        guard let context,
+              let photo = try context.fetch(FetchDescriptor<Photo>(predicate: #Predicate { $0.id == photoId })).first,
+              let number = photo.burstNumber else { return [] }
+        let burstNumber: Int? = number
+        let sameBurst = try context.fetch(FetchDescriptor<Photo>(predicate: #Predicate { $0.burstNumber == burstNumber }))
+        // Burst numbers start at 1 in every gallery: the other galleries' bursts are left out here.
+        let galleryId = photo.gallery?.id
+        return sameBurst.filter { $0.gallery?.id == galleryId }
+    }
+
+    /// Like `save(_:actionName:)`, for the best photo of a burst. Returns false when nothing changed.
+    private func saveCovers(_ changes: [CoverChange], actionName: String) throws -> Bool {
+        guard let context, !changes.isEmpty else { return false }
+        let ids = changes.map(\.photoId)
+        let photos = try context.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) }))
+        let photosById = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
+
+        var previous: [CoverChange] = []
+        for change in changes {
+            guard let photo = photosById[change.photoId], photo.bestOfBurstChosenAt != change.chosenAt else { continue }
+            previous.append(CoverChange(photoId: photo.id, chosenAt: photo.bestOfBurstChosenAt))
+            photo.bestOfBurstChosenAt = change.chosenAt
+        }
+        guard !previous.isEmpty else { return false }
+        try context.save()
+
+        undoManager?.registerUndo(withTarget: self) { sorter in
+            sorter.restoreCovers(previous, actionName: actionName)
+        }
+        undoManager?.setActionName(actionName)
+        if let photoId = changes.first?.photoId, let photo = photosById[photoId] {
+            announceCover(of: photo)
+        }
+        return true
+    }
+
+    /// Undo or redo of a best photo: puts the dates back and selects the photo chosen again
+    /// (or, when no choice is left, the photo whose choice was undone).
+    private func restoreCovers(_ changes: [CoverChange], actionName: String) {
+        do {
+            _ = try saveCovers(changes, actionName: actionName)
+        } catch {
+            Self.logger.error("Burst cover not restored: \(error.localizedDescription, privacy: .public)")
+        }
+        if let photoId = (changes.first { $0.chosenAt != nil } ?? changes.first)?.photoId {
+            browser?.reveal(photoId)
+        }
+    }
+
+    /// VoiceOver: « DSC04297.ARW : meilleure photo de la rafale, votre choix ».
+    private func announceCover(of photo: Photo) {
+        let message = photo.bestOfBurstChosenAt != nil
+            ? String(localized: "\(photo.fileName) : meilleure photo de la rafale, votre choix")
+            : String(localized: "\(photo.fileName) : meilleure photo selon l'IA")
+        AccessibilityNotification.Announcement(message).post()
     }
 
     /// VoiceOver says the new verdict, e.g. « DSC04297.ARW : Garder, votre choix ».

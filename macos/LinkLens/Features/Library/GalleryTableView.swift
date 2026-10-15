@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The photos of a gallery as a table: file, verdict, burst, reason, shot date, dimensions, size.
-/// A collapsed burst is one row (its best photo); the chevron of the "Rafale" column or S opens it (F4).
+/// A collapsed burst is one row (its best photo); the chevron of the "Rafale" column or S opens it,
+/// B chooses its best photo (F4).
 /// P / U / X sort the selected photo by hand and go to the next row; A goes back to the AI's proposal.
 struct GalleryTableView: View {
     let rows: [DisplayedPhoto]
@@ -21,6 +22,9 @@ struct GalleryTableView: View {
                     // VoiceOver lists these in the actions of the row's first cell.
                     .accessibilityActions {
                         SortingButtons { command in sorter.apply(command, to: [row.photo.id]) }
+                        if let burst = row.entry.burst {
+                            BurstCoverButtons(burst: burst) { command in sorter.apply(command, to: row.photo.id) }
+                        }
                     }
             }
             .width(min: 115, ideal: 120, max: 160)
@@ -36,7 +40,7 @@ struct GalleryTableView: View {
             }
             .width(min: 100, ideal: 110, max: 130)
             TableColumn("Raison") { row in
-                ReasonCell(photo: row.photo)
+                ReasonCell(photo: row.photo, burst: row.entry.burst)
             }
             // 100 points less than before F4: the "Rafale" column keeps the window's minimum width unchanged.
             .width(min: 120, ideal: 330)
@@ -65,6 +69,11 @@ struct GalleryTableView: View {
         .contextMenu(forSelectionType: UUID.self) { ids in
             if !ids.isEmpty {
                 SortingButtons(showsKeys: true) { command in sorter.apply(command, to: Array(ids)) }
+                // The best photo of a burst: one row at a time.
+                if ids.count == 1, let row = rows.first(where: { ids.contains($0.id) }), let burst = row.entry.burst {
+                    Divider()
+                    BurstCoverButtons(burst: burst, showsKeys: true) { command in sorter.apply(command, to: row.photo.id) }
+                }
             }
         } primaryAction: { ids in
             if let id = ids.first { browser.openViewer(on: id) }
@@ -78,6 +87,11 @@ struct GalleryTableView: View {
         .onKeyPress(characters: SortingCommand.keyCharacters, phases: .down) { press in
             guard let command = SortingCommand(press) else { return .ignored }
             return sorter.applyToSelection(command, advance: true) ? .handled : .ignored
+        }
+        // B as in "best": the selected photo stands for its burst (F4), even after a new sorting.
+        .onKeyPress(characters: BurstCoverCommand.keyCharacters, phases: .down) { press in
+            guard BurstCoverCommand(press) != nil else { return .ignored }
+            return sorter.chooseSelectedBurstCover() ? .handled : .ignored
         }
     }
 }
@@ -113,15 +127,18 @@ private struct BurstCell: View {
 /// When the user overruled the AI, the reason says what the AI proposed: « IA : Rejeter · Photo floue ».
 private struct ReasonCell: View {
     let photo: Photo
+    let burst: BurstPlacement?
 
     var body: some View {
         let messages = photo.cullingReasons.map { $0.message() }
         let overruled = photo.isVerdictChosenByUser && photo.cullingVerdict != nil && photo.cullingVerdict != photo.verdict
         HStack(spacing: 4) {
-            if photo.isBestOfBurst {
-                Image(systemName: "star.fill")
+            if let burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
+                // The user's choice is an outlined star, like their verdicts.
+                Image(systemName: burst.isCoverChosenByUser ? "star.circle.fill" : "star.fill")
                     .foregroundStyle(.yellow)
-                    .accessibilityLabel("Meilleure photo de la rafale")
+                    .help(burst.starDescription)
+                    .accessibilityLabel(Text(verbatim: burst.starDescription))
             }
             if overruled, let proposal = photo.cullingVerdict {
                 Text("IA : \(proposal.label) ·")

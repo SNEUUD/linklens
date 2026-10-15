@@ -135,3 +135,94 @@ struct GalleryBrowserBurstTests {
         #expect(browser.selection == ids[2])
     }
 }
+
+/// F4: the best photo of a burst chosen by hand (B key). The choice belongs to the photo, not to the
+/// burst number, which changes on every new sorting.
+struct BurstCoverChoiceTests {
+    private let earlier = Date(timeIntervalSince1970: 1_790_000_000)
+    private let later = Date(timeIntervalSince1970: 1_790_000_100)
+
+    /// One photo: its burst, whether the AI marked it best, and when the user chose it.
+    private func photo(_ burst: Int?, ai: Bool = false, chosen: Date? = nil, id: UUID = UUID()) -> BurstStacks.Input {
+        BurstStacks.Input(id: id, burstNumber: burst, isBestOfBurst: ai, bestChosenAt: chosen)
+    }
+
+    /// Index of the photo shown by each collapsed entry.
+    private func covers(_ photos: [BurstStacks.Input]) -> [Int] {
+        BurstStacks.entries(for: photos, expanded: []).map(\.photoIndex)
+    }
+
+    @Test func theUserChoiceStandsForTheBurstInsteadOfTheAIs() {
+        let input = [photo(1, ai: true), photo(1, chosen: earlier), photo(1)]
+
+        let collapsed = BurstStacks.entries(for: input, expanded: [])
+        let expanded = BurstStacks.entries(for: input, expanded: [1])
+
+        #expect(collapsed.map(\.photoIndex) == [1])
+        #expect(collapsed[0].burst == BurstPlacement(number: 1, count: 3, isExpanded: false, isCover: true, isCoverChosenByUser: true))
+        #expect(expanded.map { $0.burst?.isCover } == [false, true, false], "the AI's photo is no longer the cover")
+        #expect(expanded.allSatisfy { $0.burst?.isCoverChosenByUser == true }, "every photo of the burst knows it")
+    }
+
+    @Test func withoutAChoiceTheAIsBestStaysTheCover() {
+        let entries = BurstStacks.entries(for: [photo(1), photo(1, ai: true)], expanded: [])
+
+        #expect(entries.map(\.photoIndex) == [1])
+        #expect(entries[0].burst?.isCoverChosenByUser == false)
+    }
+
+    @Test func aRenumberedBurstKeepsTheChoice() {
+        let ids = (0..<3).map { _ in UUID() }
+        let before = [photo(1, ai: true, id: ids[0]), photo(1, chosen: earlier, id: ids[1]), photo(2, ai: true, id: ids[2])]
+        // A new sorting: a burst found earlier in the session shifts the numbers.
+        let after = [photo(5, ai: true, id: ids[0]), photo(5, chosen: earlier, id: ids[1]), photo(6, ai: true, id: ids[2])]
+
+        #expect(covers(before) == [1, 2])
+        #expect(covers(after) == [1, 2])
+    }
+
+    @Test func aSplitBurstKeepsTheChoiceInItsPartOnly() {
+        // One burst of 4 with the 3rd chosen, then split in two bursts by a new sorting.
+        let split = [photo(1, ai: true), photo(1), photo(2, chosen: earlier), photo(2, ai: true)]
+
+        let entries = BurstStacks.entries(for: split, expanded: [])
+
+        #expect(entries.map(\.photoIndex) == [0, 2], "the AI's best for the first part, the user's for the second")
+        #expect(entries.map { $0.burst?.isCoverChosenByUser } == [false, true])
+    }
+
+    @Test func mergedBurstsKeepTheMostRecentChoice() {
+        // Two bursts, each with a choice, merged by a new sorting.
+        let merged = [photo(1, ai: true), photo(1, chosen: later), photo(1, chosen: earlier), photo(1)]
+
+        #expect(covers(merged) == [1])
+        #expect(covers([photo(1, chosen: earlier), photo(1, chosen: later)]) == [1])
+    }
+
+    @Test func equalDatesGiveTheFirstPhoto() {
+        #expect(covers([photo(1), photo(1, chosen: earlier), photo(1, chosen: earlier)]) == [1])
+    }
+
+    @Test func aChosenPhotoOutsideAnyBurstChangesNothing() {
+        let input = [photo(nil, chosen: earlier), photo(1, ai: true), photo(1)]
+
+        let entries = BurstStacks.entries(for: input, expanded: [])
+
+        #expect(entries.map(\.photoIndex) == [0, 1])
+        #expect(entries[0].burst == nil)
+        #expect(entries[1].burst?.isCoverChosenByUser == false)
+    }
+
+    @Test func theStarFollowsTheCover() {
+        let ai = BurstPlacement(number: 1, count: 2, isExpanded: true, isCover: true)
+        let user = BurstPlacement(number: 1, count: 2, isExpanded: true, isCover: true, isCoverChosenByUser: true)
+        let other = BurstPlacement(number: 1, count: 2, isExpanded: true, isCover: false, isCoverChosenByUser: true)
+
+        #expect(ai.showsStar(isBestOfBurst: true))
+        #expect(!ai.showsStar(isBestOfBurst: false), "the first photo only stands in when nobody chose")
+        #expect(user.showsStar(isBestOfBurst: false))
+        #expect(!other.showsStar(isBestOfBurst: true), "the AI's best loses its star to the user's choice")
+        #expect(user.starDescription == "Meilleure photo de la rafale, votre choix")
+        #expect(ai.starDescription == "Meilleure photo de la rafale")
+    }
+}

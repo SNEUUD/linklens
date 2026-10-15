@@ -93,14 +93,42 @@ struct SortingButtons: View {
     }
 }
 
-/// Star of the best photo of a burst, readable over any photo.
+/// « Choisir comme meilleure de la rafale » and « Revenir à la meilleure selon l'IA » (F4), for context
+/// menus and VoiceOver actions. Each one only appears when it would change something.
+struct BurstCoverButtons: View {
+    let burst: BurstPlacement
+    /// Adds the key to the title, for menus; VoiceOver actions go without.
+    var showsKeys = false
+    let action: (BurstCoverCommand) -> Void
+
+    var body: some View {
+        if !(burst.isCover && burst.isCoverChosenByUser) {
+            Button(showsKeys ? "Choisir comme meilleure de la rafale (B)" : "Choisir comme meilleure de la rafale") {
+                action(.choose)
+            }
+        }
+        if burst.isCoverChosenByUser {
+            Button("Revenir à la meilleure selon l'IA") { action(.followAI) }
+        }
+    }
+}
+
+/// Star of the best photo of a burst, readable over any photo. Outlined in white when the user
+/// chose it, like the verdict marks.
 struct BestOfBurstStar: View {
+    let burst: BurstPlacement
+
     var body: some View {
         Image(systemName: "star.fill")
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.yellow)
             .frame(width: 20, height: 20)
             .background(.black.opacity(0.55), in: Circle())
-            .accessibilityLabel("Meilleure photo de la rafale")
+            .overlay {
+                if burst.isCoverChosenByUser {
+                    Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1.5)
+                }
+            }
+            .accessibilityLabel(Text(verbatim: burst.starDescription))
     }
 }

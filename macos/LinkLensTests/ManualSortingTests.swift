@@ -298,6 +298,167 @@ struct ManualSortingTests {
         #expect(!fixture.undoManager.canUndo)
     }
 
+    // MARK: - Best photo of a burst (F4)
+
+    @Test func bKeyChoosesTheBestPhoto() {
+        #expect(BurstCoverCommand(characters: "b", modifiers: []) == .choose)
+        #expect(BurstCoverCommand(characters: "B", modifiers: .shift) == .choose, "Shift or Caps Lock still work")
+        #expect(BurstCoverCommand(characters: "b", modifiers: .command) == nil, "⌘B belongs to the menus")
+        #expect(BurstCoverCommand(characters: "s", modifiers: []) == nil, "S opens bursts")
+        #expect(SortingCommand(characters: "b", modifiers: []) == nil, "B does not sort")
+    }
+
+    @Test func aChosenBestPhotoStandsForTheBurstAndVerdictsStay() throws {
+        let fixture = try Fixture(aiVerdicts: [.review, .keep, .reject], burst: (number: 1, best: 1))
+        let photos = fixture.photos
+
+        fixture.changeCover(.choose, photos[2])
+
+        #expect(fixture.browser.photoIds == [photos[2].id], "collapsed: the chosen photo is shown")
+        #expect(fixture.browser.entries[0].burst?.isCoverChosenByUser == true)
+        #expect(photos.map(\.verdict) == [.review, .keep, .reject], "verdicts are not changed")
+        #expect(photos.map(\.isBestOfBurst) == [false, true, false], "the AI's choice is kept apart")
+        #expect(try fixture.storedCoverChoices() == [false, false, true], "saved at once")
+    }
+
+    @Test func aBurstHasOneChoiceAtATime() throws {
+        let fixture = try Fixture(aiVerdicts: [.review, .keep, .review], burst: (number: 1, best: 1))
+
+        fixture.changeCover(.choose, fixture.photos[2])
+        fixture.changeCover(.choose, fixture.photos[0])
+
+        #expect(try fixture.storedCoverChoices() == [true, false, false])
+        #expect(fixture.browser.photoIds == [fixture.photos[0].id])
+    }
+
+    @Test func bKeyWorksOnThePhotosOfABurstOnly() throws {
+        let fixture = try Fixture(aiVerdicts: [.review, .keep, .keep], burst: (number: 1, best: 1))
+        let photos = fixture.photos
+        photos[2].burstNumber = nil
+        fixture.refresh()
+        fixture.browser.toggleBurst(1)
+        fixture.browser.selection = photos[0].id
+
+        #expect(fixture.pressB())
+        #expect(photos[0].bestOfBurstChosenAt != nil)
+        #expect(fixture.browser.selection == photos[0].id, "B does not move to the next photo")
+
+        fixture.browser.selection = photos[2].id
+        #expect(!fixture.pressB(), "a single photo is not in a burst")
+        #expect(photos[2].bestOfBurstChosenAt == nil)
+    }
+
+    @Test func choosingTheSameBestPhotoAgainAddsNothingToUndo() throws {
+        let fixture = try Fixture(aiVerdicts: [.review, .keep], burst: (number: 1, best: 1))
+        let photo = fixture.photos[0]
+        fixture.changeCover(.choose, photo)
+        let chosenAt = photo.bestOfBurstChosenAt
+
+        // Outside an undo group on purpose: registering an undo here would be refused by AppKit.
+        #expect(!fixture.sorter.apply(.choose, to: photo.id))
+        #expect(photo.bestOfBurstChosenAt == chosenAt, "the first date is kept")
+
+        fixture.undo()
+        #expect(photo.bestOfBurstChosenAt == nil, "one ⌘Z undoes it")
+    }
+
+    @Test func undoAndRedoGoThroughTheChosenBestPhotos() throws {
+        let fixture = try Fixture(aiVerdicts: [.review, .keep, .review], burst: (number: 1, best: 1))
+        let (a, b, c) = (fixture.photos[0], fixture.photos[1], fixture.photos[2])
+        let undo = fixture.undoManager
+
+        fixture.changeCover(.choose, c)
+        fixture.changeCover(.choose, a)
+        #expect(undo.undoActionName == "Meilleure de la rafale")
+
+        fixture.undo()
+        #expect(try fixture.storedCoverChoices() == [false, false, true])
+        #expect(fixture.browser.photoIds == [c.id])
+        #expect(fixture.browser.selection == c.id, "undo selects the photo chosen again")
+        fixture.undo()
+        #expect(try fixture.storedCoverChoices() == [false, false, false])
+        #expect(fixture.browser.photoIds == [b.id], "back to the AI's best photo")
+        #expect(!undo.canUndo)
+
+        fixture.redo()
+        fixture.redo()
+        #expect(try fixture.storedCoverChoices() == [true, false, false])
+        #expect(fixture.browser.photoIds == [a.id])
+        #expect(!undo.canRedo)
+    }
+
+    @Test func goingBackToTheAIsBestPhotoCanBeUndone() throws {
+        let fixture = try Fixture(aiVerdicts: [.review, .keep, .review], burst: (number: 1, best: 1))
+        let photos = fixture.photos
+        fixture.changeCover(.choose, photos[2])
+
+        // From any photo of the burst.
+        fixture.changeCover(.followAI, photos[0])
+
+        #expect(try fixture.storedCoverChoices() == [false, false, false])
+        #expect(fixture.browser.photoIds == [photos[1].id])
+        #expect(fixture.undoManager.undoActionName == "Meilleure selon l'IA")
+
+        fixture.undo()
+        #expect(try fixture.storedCoverChoices() == [false, false, true])
+        #expect(fixture.browser.photoIds == [photos[2].id])
+    }
+
+    @Test func burstsOfOtherGalleriesAreLeftAlone() async throws {
+        let container = try makeInMemoryContainer()
+        let store = LibraryStore(modelContainer: container)
+        _ = try await galleryWithoutFiles(["a.ARW", "b.ARW"], store: store)
+        _ = try await galleryWithoutFiles(["c.ARW", "d.ARW"], store: store)
+        let context = container.mainContext
+        let photos = try context.fetch(FetchDescriptor<Photo>(sortBy: [SortDescriptor(\.relativePath)]))
+        // Burst numbers start at 1 in every gallery.
+        for photo in photos { photo.burstNumber = 1 }
+        let otherChoice = Date(timeIntervalSince1970: 1_790_000_000)
+        photos[3].bestOfBurstChosenAt = otherChoice
+        try context.save()
+
+        ManualSorter(browser: nil, context: context).chooseBurstCover(photos[0].id)
+
+        let fresh = try ModelContext(container).fetch(FetchDescriptor<Photo>(sortBy: [SortDescriptor(\.relativePath)]))
+        #expect(fresh.map { $0.bestOfBurstChosenAt != nil } == [true, false, false, true])
+        #expect(fresh[3].bestOfBurstChosenAt == otherChoice)
+    }
+
+    @Test func aNewSortingKeepsTheChosenBestPhotoUnderItsNewBurstNumber() async throws {
+        let container = try makeInMemoryContainer()
+        let store = LibraryStore(modelContainer: container)
+        let galleryId = try await galleryWithoutFiles(["a.ARW", "b.ARW", "c.ARW"], store: store)
+        let ids = try await store.cullingContents(galleryId: galleryId).photos
+            .sorted { $0.relativePath < $1.relativePath }.map(\.id)
+        try await store.saveCulling(burstResults(ids, number: 1, best: ids[0]), analyzedAt: Date())
+        ManualSorter(browser: nil, context: container.mainContext).chooseBurstCover(ids[2])
+
+        // « Trier à nouveau »: the burst gets another number and the AI now prefers b.
+        try await store.saveCulling(burstResults(ids, number: 2, best: ids[1]), analyzedAt: Date())
+
+        let fresh = try ModelContext(container).fetch(FetchDescriptor<Photo>(sortBy: [SortDescriptor(\.relativePath)]))
+        #expect(fresh.map(\.burstNumber) == [2, 2, 2])
+        #expect(fresh.map(\.isBestOfBurst) == [false, true, false], "the AI's new choice is stored next to it")
+        #expect(fresh[2].bestOfBurstChosenAt != nil)
+        #expect(BurstStacks.entries(for: fresh.map(\.burstInput), expanded: []).map(\.photoId) == [ids[2]])
+    }
+
+    @Test func aPhotoBackFromTheTrashKeepsItsBestOfBurstChoice() async throws {
+        let container = try makeInMemoryContainer()
+        let store = LibraryStore(modelContainer: container)
+        let galleryId = try await galleryWithoutFiles(["a.ARW", "b.ARW"], store: store)
+        let ids = try await store.cullingContents(galleryId: galleryId).photos.map(\.id)
+        try await store.saveCulling(burstResults(ids, number: 1, best: ids[0]), analyzedAt: Date())
+        ManualSorter(browser: nil, context: container.mainContext).chooseBurstCover(ids[1])
+        let chosenAt = try #require(try ModelContext(container).fetch(FetchDescriptor<Photo>()).first { $0.id == ids[1] }?.bestOfBurstChosenAt)
+
+        let snapshots = try await store.removePhotos(ids: [ids[1]])
+        try await store.restorePhotos(snapshots, galleryId: galleryId)
+
+        let photo = try #require(try ModelContext(container).fetch(FetchDescriptor<Photo>()).first { $0.id == ids[1] })
+        #expect(photo.bestOfBurstChosenAt == chosenAt)
+    }
+
     // MARK: - Helpers
 
     /// A gallery of photos named 0.ARW, 1.ARW… with the AI's verdicts, in an in-memory catalogue.
@@ -352,6 +513,50 @@ struct ManualSortingTests {
             return sorter.applyToSelection(command, advance: advance)
         }
 
+        /// One click on « Choisir comme meilleure de la rafale » or « Revenir à la meilleure selon l'IA »,
+        /// as one undo step.
+        @discardableResult
+        func changeCover(_ command: BurstCoverCommand, _ photo: Photo) -> Bool {
+            undoManager.beginUndoGrouping()
+            defer {
+                undoManager.endUndoGrouping()
+                refresh()
+            }
+            return sorter.apply(command, to: photo.id)
+        }
+
+        /// B on the selection, as one undo step.
+        @discardableResult
+        func pressB() -> Bool {
+            undoManager.beginUndoGrouping()
+            defer {
+                undoManager.endUndoGrouping()
+                refresh()
+            }
+            return sorter.chooseSelectedBurstCover()
+        }
+
+        func undo() {
+            undoManager.undo()
+            refresh()
+        }
+
+        func redo() {
+            undoManager.redo()
+            refresh()
+        }
+
+        /// What `GalleryDetailView` does when its `@Query` sees a change: the stacks are rebuilt.
+        func refresh() {
+            browser.setPhotos(photos.map(\.burstInput))
+        }
+
+        /// Whether each photo is the user's best of burst, as saved, in the order of `photos`.
+        func storedCoverChoices() throws -> [Bool] {
+            let stored = try ModelContext(context.container).fetch(FetchDescriptor<Photo>())
+            return photos.map { photo in stored.first { $0.id == photo.id }?.bestOfBurstChosenAt != nil }
+        }
+
         /// `userVerdictRaw` as saved, read by a separate context, in the order of `photos`.
         func storedUserVerdicts() throws -> [String?] {
             let stored = try ModelContext(context.container).fetch(FetchDescriptor<Photo>())
@@ -378,6 +583,16 @@ private func aiResult(_ verdict: CullingVerdict, for photoId: UUID) -> CullingRe
     case .reject: .blurry
     }
     return CullingResult(photoId: photoId, verdict: verdict, reasons: [CullingReason(kind: kind, verdict: verdict)])
+}
+
+/// The AI's results for one burst made of every photo, `best` being its best photo.
+private func burstResults(_ ids: [UUID], number: Int, best: UUID) -> [CullingResult] {
+    ids.map { id in
+        var result = aiResult(id == best ? .keep : .review, for: id)
+        result.burstNumber = number
+        result.isBestOfBurst = id == best
+        return result
+    }
 }
 
 /// An indexed gallery whose files do not exist: enough for everything that does not read them.

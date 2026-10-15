@@ -21,6 +21,24 @@ struct BurstPlacement: Equatable, Sendable {
     var isExpanded: Bool
     /// True for the best photo of the burst (the one shown when collapsed).
     var isCover: Bool
+    /// True when the burst's best photo was chosen by the user (B key), false when it is the AI's.
+    /// The same for every photo of the burst.
+    var isCoverChosenByUser = false
+}
+
+extension BurstPlacement {
+    /// The star goes on the burst's best photo, but not on the first photo of a burst nobody chose
+    /// (e.g. a failed analysis), which only stands in for it.
+    func showsStar(isBestOfBurst: Bool) -> Bool {
+        isCover && (isCoverChosenByUser || isBestOfBurst)
+    }
+
+    /// Spoken by VoiceOver and shown next to the star.
+    var starDescription: String {
+        isCoverChosenByUser
+            ? String(localized: "Meilleure photo de la rafale, votre choix")
+            : String(localized: "Meilleure photo de la rafale")
+    }
 }
 
 /// F4: groups the photos of each burst into a stack showing its best photo.
@@ -31,6 +49,8 @@ enum BurstStacks {
         var id: UUID
         var burstNumber: Int?
         var isBestOfBurst = false
+        /// When the user chose this photo as the best of its burst, nil if they did not.
+        var bestChosenAt: Date?
     }
 
     /// - Parameters:
@@ -58,15 +78,33 @@ enum BurstStacks {
             // The whole burst is added when its first member is reached; the other members are skipped.
             guard burst[0] == index else { continue }
 
-            // The best photo chosen by F3; the first one if none is marked (e.g. a failed analysis).
-            let cover = burst.first { photos[$0].isBestOfBurst } ?? burst[0]
+            let userCover = userChosenCover(of: burst, in: photos)
+            let cover = userCover ?? aiCover(of: burst, in: photos)
             let isExpanded = expanded.contains(number)
             let shown = isExpanded ? burst : [cover]
             for member in shown {
-                let placement = BurstPlacement(number: number, count: burst.count, isExpanded: isExpanded, isCover: member == cover)
+                let placement = BurstPlacement(
+                    number: number, count: burst.count, isExpanded: isExpanded,
+                    isCover: member == cover, isCoverChosenByUser: userCover != nil
+                )
                 entries.append(GalleryEntry(photoId: photos[member].id, photoIndex: member, burst: placement))
             }
         }
         return entries
+    }
+
+    /// The photo the user chose most recently in this burst, nil if they chose none. Choices are tied to
+    /// photos, not to burst numbers: after a new sorting they follow their photo into its new burst.
+    /// When two bursts merge, the most recent choice wins; the older one stays stored, unused.
+    private static func userChosenCover(of burst: [Int], in photos: [Input]) -> Int? {
+        // `compactMap` drops the nils, like `.map(…).filter(x => x != null)` in TypeScript.
+        let chosen = burst.compactMap { index in photos[index].bestChosenAt.map { (index, $0) } }
+        // `max(by:)` keeps the first of equal elements, so equal dates give the earliest photo.
+        return chosen.max { $0.1 < $1.1 }?.0
+    }
+
+    /// The best photo chosen by F3; the first one if none is marked (e.g. a failed analysis).
+    private static func aiCover(of burst: [Int], in photos: [Input]) -> Int {
+        burst.first { photos[$0].isBestOfBurst } ?? burst[0]
     }
 }
