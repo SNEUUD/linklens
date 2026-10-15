@@ -134,8 +134,9 @@ struct ThumbnailLoaderTests {
 
         #expect(imageA.width == ThumbnailGenerator.maxPixelSize)
         #expect(imageB.height == ThumbnailGenerator.maxPixelSize)
+        // The disk cache is what must hold. The memory one (`cachedThumbnail`) is not checked: macOS may
+        // empty an `NSCache` at any time under memory pressure, which made this test fail now and then.
         #expect(cache.contains(a.photoId) && cache.contains(b.photoId))
-        #expect(loader.cachedThumbnail(for: a.photoId) != nil)
         // Only the cache was written to: the photo folder is exactly as before.
         #expect(try photos.snapshot() == before)
     }
