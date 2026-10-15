@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import os
 
 /// What the app may know about a mounted volume without the user's consent.
 struct VolumeInfo: Sendable, Equatable {
@@ -64,6 +65,7 @@ final class CardMonitor {
     /// Cards the user closed the banner of; they come back when inserted again.
     @ObservationIgnored private var dismissed: Set<URL> = []
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    private nonisolated static let logger = Logger(subsystem: "fr.chriscrepin.linklens", category: "cards")
 
     /// Starts listening, and offers the cards already inserted when the app opens.
     func start() {
@@ -98,8 +100,12 @@ final class CardMonitor {
     func volumeMounted(_ url: URL) {
         let key = url.standardizedFileURL
         guard !dismissed.contains(key), !cards.contains(where: { $0.url.standardizedFileURL == key }),
-              let info = VolumeInfo.read(url), info.looksLikeCameraCard
+              let info = VolumeInfo.read(url)
         else { return }
+        // Logged so a card that is not offered can be diagnosed (Console app, category "cards").
+        let dcim = info.hasCameraFolder.map { String($0) } ?? "unknown"
+        Self.logger.notice("Volume \(info.name, privacy: .public): removable \(info.isRemovable), ejectable \(info.isEjectable), local \(info.isLocal), file system \(info.fileSystem ?? "?", privacy: .public), DCIM \(dcim, privacy: .public) -> card \(info.looksLikeCameraCard)")
+        guard info.looksLikeCameraCard else { return }
         cards.append(DetectedCard(url: url, name: info.name))
     }
 
