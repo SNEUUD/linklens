@@ -214,6 +214,17 @@ struct CardImporter: Sendable {
             case .indexed(let galleryId, _), .alreadyIndexed(let galleryId):
                 report.galleryId = galleryId
             }
+            if let galleryId = report.galleryId {
+                // The fingerprints checked during the copy spare the duplicate search (F5) from reading
+                // these files again. Files are flat in the session folder: the path is the file name.
+                let fingerprints = Dictionary(
+                    report.copiedFiles.map { ($0.destination.lastPathComponent, $0.sha256) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                // This app created the folder in a location chosen read-write: allowed to trash duplicates there.
+                let writeBookmark = try? FolderBookmark.createReadWrite(for: report.sessionFolder)
+                try? await store.saveImportedFingerprints(fingerprints, writeBookmark: writeBookmark, galleryId: galleryId)
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch {

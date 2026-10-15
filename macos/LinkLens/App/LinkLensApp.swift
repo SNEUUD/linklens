@@ -11,6 +11,7 @@ struct LinkLensApp: App {
     @State private var exportController = ExportController()
     @State private var cardImportController: CardImportController
     @State private var cardMonitor: CardMonitor
+    @State private var duplicatesController: DuplicatesController
 
     init() {
         do {
@@ -30,6 +31,7 @@ struct LinkLensApp: App {
             folderImport.selectedGalleryId = galleryId
             culling.cull(galleryId: galleryId)
         })
+        _duplicatesController = State(initialValue: DuplicatesController(store: store))
         let monitor = CardMonitor()
         _cardMonitor = State(initialValue: monitor)
         // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch, and
@@ -49,6 +51,7 @@ struct LinkLensApp: App {
                 .environment(exportController)
                 .environment(cardImportController)
                 .environment(cardMonitor)
+                .environment(duplicatesController)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)

@@ -34,6 +34,11 @@ final class Photo {
     var burstNumber: Int?
     var isBestOfBurst = false
 
+    // F5 duplicates.
+    /// SHA-256 of the file (hexadecimal): known after a card import (F1), otherwise computed on demand
+    /// by the duplicate search, only for files whose size matches another file's.
+    var sha256: String?
+
     init(draft: PhotoDraft) {
         id = draft.id
         relativePath = draft.relativePath
@@ -69,6 +74,60 @@ extension Photo {
         aestheticsScore = result.aesthetics
         burstNumber = result.burstNumber
         isBestOfBurst = result.isBestOfBurst
+    }
+}
+
+/// Every stored field of a photo, kept while its file is in the trash (F5) so "Annuler" can put the
+/// photo back exactly as it was: same id (so the cached thumbnail still matches), verdict and reasons.
+struct PhotoSnapshot: Sendable, Equatable {
+    var id: UUID
+    var relativePath: String
+    var fileSize: Int64
+    var captureDate: Date?
+    var pixelWidth: Int
+    var pixelHeight: Int
+    var importedAt: Date
+    var mediaKindRaw: String?
+    var cullingVerdictRaw: String?
+    var cullingReasonsData: Data?
+    var analyzedAt: Date?
+    var sharpness: Double?
+    var aestheticsScore: Double?
+    var burstNumber: Int?
+    var isBestOfBurst: Bool
+    var sha256: String?
+}
+
+extension Photo {
+    var snapshot: PhotoSnapshot {
+        PhotoSnapshot(
+            id: id, relativePath: relativePath, fileSize: fileSize, captureDate: captureDate,
+            pixelWidth: pixelWidth, pixelHeight: pixelHeight, importedAt: importedAt, mediaKindRaw: mediaKindRaw,
+            cullingVerdictRaw: cullingVerdictRaw, cullingReasonsData: cullingReasonsData, analyzedAt: analyzedAt,
+            sharpness: sharpness, aestheticsScore: aestheticsScore, burstNumber: burstNumber,
+            isBestOfBurst: isBestOfBurst, sha256: sha256
+        )
+    }
+
+    // A `convenience init` must call another initializer of the class first (here `init(draft:)`),
+    // then may set the remaining properties. It is the only kind of init a class extension may add.
+    convenience init(snapshot: PhotoSnapshot) {
+        var draft = PhotoDraft(
+            file: PhotoFile(url: URL(filePath: snapshot.relativePath), relativePath: snapshot.relativePath, fileSize: snapshot.fileSize),
+            metadata: PhotoMetadata(captureDate: snapshot.captureDate, pixelWidth: snapshot.pixelWidth, pixelHeight: snapshot.pixelHeight),
+            importedAt: snapshot.importedAt
+        )
+        draft.id = snapshot.id
+        self.init(draft: draft)
+        mediaKindRaw = snapshot.mediaKindRaw
+        cullingVerdictRaw = snapshot.cullingVerdictRaw
+        cullingReasonsData = snapshot.cullingReasonsData
+        analyzedAt = snapshot.analyzedAt
+        sharpness = snapshot.sharpness
+        aestheticsScore = snapshot.aestheticsScore
+        burstNumber = snapshot.burstNumber
+        isBestOfBurst = snapshot.isBestOfBurst
+        sha256 = snapshot.sha256
     }
 }
 

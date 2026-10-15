@@ -14,6 +14,9 @@ final class Gallery {
     var folderPath: String
     /// Security-scoped bookmark: lets the sandboxed app reopen the folder after a restart.
     var folderBookmark: Data
+    /// Read-write bookmark of the same folder, only needed to put duplicates in the trash (F5).
+    /// Set by a card import (F1), or once the user has allowed it; nil for a folder only indexed (F2).
+    var writeBookmark: Data?
     /// Photos and videos stored so far, updated batch by batch (cheaper to display than `photos.count`).
     var photoCount: Int
     /// How many of `photoCount` are videos (F1). A default value lets SwiftData migrate older catalogues.

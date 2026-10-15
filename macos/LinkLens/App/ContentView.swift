@@ -8,7 +8,9 @@ struct ContentView: View {
     @Environment(CullingController.self) private var cullingController
     @Environment(CardImportController.self) private var cardImportController
     @Environment(CardMonitor.self) private var cardMonitor
+    @Environment(DuplicatesController.self) private var duplicatesController
     @Query(sort: \Gallery.createdAt, order: .reverse) private var galleries: [Gallery]
+    @State private var isDuplicatesSheetPresented = false
 
     var body: some View {
         // `@Bindable` gives two-way bindings (`$…`) to the properties of an `@Observable` object.
@@ -79,6 +81,15 @@ struct ContentView: View {
                     .disabled(importController.isIndexing)
                     .help("Indexer un dossier de photos sans le copier")
             }
+            ToolbarItem(placement: .navigation) {
+                Button("Doublons…", systemImage: "square.on.square") { isDuplicatesSheetPresented = true }
+                    .disabled(galleries.isEmpty)
+                    .help("Rechercher les fichiers identiques dans toutes vos galeries")
+            }
+        }
+        .sheet(isPresented: $isDuplicatesSheetPresented) {
+            DuplicatesSheet()
+                .environment(duplicatesController)
         }
         .sheet(isPresented: Binding(
             get: { cardImportController.isSheetPresented },
@@ -126,6 +137,7 @@ struct ContentView: View {
         .environment(ExportController())
         .environment(CardImportController(importer: CardImporter(store: store)))
         .environment(CardMonitor())
+        .environment(DuplicatesController(store: store))
         .modelContainer(container)
 }
 

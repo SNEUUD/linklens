@@ -99,6 +99,86 @@ actor LibraryStore {
         return try modelContext.fetch(descriptor).map(\.id)
     }
 
+    // MARK: - Duplicates (F5)
+
+    /// Every file of the fully indexed galleries, with the location of each gallery.
+    func duplicateCatalogue() throws -> (galleries: [GalleryLocation], files: [DuplicateCopy]) {
+        let galleries = try modelContext.fetch(FetchDescriptor<Gallery>(predicate: #Predicate { $0.indexedAt != nil }))
+        var files: [DuplicateCopy] = []
+        for gallery in galleries {
+            for photo in gallery.photos {
+                files.append(DuplicateCopy(
+                    photoId: photo.id, galleryId: gallery.id, galleryName: gallery.name,
+                    galleryCreatedAt: gallery.createdAt, relativePath: photo.relativePath,
+                    fileSize: photo.fileSize, sha256: photo.sha256, verdict: photo.cullingVerdict
+                ))
+            }
+        }
+        return (galleries.map(\.location), files)
+    }
+
+    /// Location of every gallery (without their photos), with the bookmarks as saved right now.
+    func galleryLocations() throws -> [GalleryLocation] {
+        try modelContext.fetch(FetchDescriptor<Gallery>()).map(\.location)
+    }
+
+    /// Stores one batch of computed fingerprints (photo id → SHA-256).
+    func saveFingerprints(_ fingerprints: [UUID: String]) throws {
+        let ids = Array(fingerprints.keys)
+        for photo in try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) })) {
+            photo.sha256 = fingerprints[photo.id]
+        }
+        try modelContext.save()
+    }
+
+    /// After a card import (F1): the fingerprints already checked during the copy, by path in the
+    /// gallery, and the read-write bookmark of the new session folder.
+    func saveImportedFingerprints(_ fingerprints: [String: String], writeBookmark: Data?, galleryId: UUID) throws {
+        let gallery = try fetchGallery(id: galleryId)
+        gallery.writeBookmark = writeBookmark
+        for photo in gallery.photos {
+            if let sha256 = fingerprints[photo.relativePath] {
+                photo.sha256 = sha256
+            }
+        }
+        try modelContext.save()
+    }
+
+    func setWriteBookmark(_ bookmark: Data, galleryId: UUID) throws {
+        try fetchGallery(id: galleryId).writeBookmark = bookmark
+        try modelContext.save()
+    }
+
+    /// Removes photos whose file went to the trash. Returns what is needed to put them back.
+    func removePhotos(ids: [UUID]) throws -> [PhotoSnapshot] {
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) }))
+        let snapshots = photos.map(\.snapshot)
+        for photo in photos {
+            if let gallery = photo.gallery {
+                gallery.photoCount -= 1
+                if photo.mediaKind == .video { gallery.videoCount -= 1 }
+            }
+            modelContext.delete(photo)
+        }
+        try modelContext.save()
+        return snapshots
+    }
+
+    /// "Annuler": puts removed photos back in their gallery, unchanged. Photos already there are skipped.
+    func restorePhotos(_ snapshots: [PhotoSnapshot], galleryId: UUID) throws {
+        let gallery = try fetchGallery(id: galleryId)
+        let ids = snapshots.map(\.id)
+        let existing = Set(try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) })).map(\.id))
+        for snapshot in snapshots where !existing.contains(snapshot.id) {
+            let photo = Photo(snapshot: snapshot)
+            modelContext.insert(photo)
+            photo.gallery = gallery
+            gallery.photoCount += 1
+            if photo.mediaKind == .video { gallery.videoCount += 1 }
+        }
+        try modelContext.save()
+    }
+
     private func fetchGallery(id: UUID) throws -> Gallery {
         var descriptor = FetchDescriptor<Gallery>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -106,6 +186,15 @@ actor LibraryStore {
             throw LibraryError.galleryNotFound
         }
         return gallery
+    }
+}
+
+extension Gallery {
+    var location: GalleryLocation {
+        GalleryLocation(
+            id: id, name: name, folderPath: folderPath, createdAt: createdAt,
+            folderBookmark: folderBookmark, writeBookmark: writeBookmark
+        )
     }
 }
 
