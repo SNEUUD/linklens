@@ -67,4 +67,54 @@ struct InterfaceRenderTests {
             appearance: appearance
         )
     }
+
+    // MARK: - Batch 2: grid, filters, progress pill
+
+    /// « Toutes », the export pill of the mockup (« 8 sur 26 ») and 04311 selected with → → → →.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func gridWithProgress(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.exportController.showProgressForRenders(
+            ExportProgress(galleryId: library.session.id, preset: .webJPEG, completed: 8, total: 26), startedAt: .now
+        )
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "grille",
+            size: CGSize(width: 1440, height: 900),
+            appearance: appearance
+        ) { window in
+            for _ in 0..<4 { WindowRenderer.pressRightArrow(in: window) }
+        }
+    }
+
+    /// « À revoir »: the 14 photos one by one, bursts unfolded.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func gridFilteredToReview(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        // The filter is remembered in the user defaults under the gallery's id (new at every run).
+        let store = VerdictFilterStore()
+        store.setFilter(.review, galleryId: library.session.id)
+        defer { store.setFilter(.all, galleryId: library.session.id) }
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "grille-a-revoir",
+            size: CGSize(width: 1440, height: 900),
+            appearance: appearance
+        )
+    }
+
+    /// F9: the wedding gallery with its disk unplugged, the glass banner above the filters.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func gridWithDiskUnplugged(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.availabilityMonitor.refresh()
+        await library.availabilityMonitor.waitUntilIdle()
+        try #require(!library.availabilityMonitor.availability(of: library.wedding.id).canUseOriginals)
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.wedding),
+            named: "grille-disque-absent",
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+    }
 }

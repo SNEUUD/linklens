@@ -34,7 +34,8 @@ enum WindowRenderer {
         named name: String,
         size: CGSize,
         appearance: Appearance,
-        settle: Duration = .seconds(2)
+        settle: Duration = .seconds(2),
+        prepare: (@MainActor (NSWindow) async throws -> Void)? = nil
     ) async throws -> URL {
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: size),
@@ -71,6 +72,11 @@ enum WindowRenderer {
         // Waiting with `Task.sleep` on the main actor keeps the main run loop turning: layout,
         // `.task` modifiers and image loading go on meanwhile.
         try await Task.sleep(for: settle)
+        // E.g. keys pressed in the window, then a moment for the view to follow.
+        if let prepare {
+            try await prepare(window)
+            try await Task.sleep(for: .seconds(1))
+        }
         window.displayIfNeeded()
 
         let png: Data
@@ -88,6 +94,22 @@ enum WindowRenderer {
         try png.write(to: url)
         print("Render: \(url.path)")
         return url
+    }
+
+    /// Sends a key to the window's focused view, as if typed (`→` is key code 124).
+    static func press(keyCode: UInt16, characters: String, in window: NSWindow) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
+            ) else { continue }
+            window.sendEvent(event)
+        }
+    }
+
+    static func pressRightArrow(in window: NSWindow) {
+        press(keyCode: 124, characters: String(Character(UnicodeScalar(UInt16(NSRightArrowFunctionKey))!)), in: window)
     }
 
     /// The window as the screen shows it (glass, blur, list rows included), through

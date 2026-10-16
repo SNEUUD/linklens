@@ -1,7 +1,9 @@
 import CoreGraphics
+import ImageIO
 import Foundation
 import SwiftData
 import SwiftUI
+import Testing
 @testable import LinkLens
 
 /// A small in-memory catalogue for the interface renders: three galleries with drawn « photos »,
@@ -11,12 +13,15 @@ final class RenderLibrary {
     let container: ModelContainer
     let store: LibraryStore
     let cache: ThumbnailCache
-    /// 52 photos, 12 / 14 / 26 with two choices of the user, 12 bursts: the session of September 20.
+    /// 52 photos, 12 / 14 / 26 with two choices of the user, 12 bursts, real thumbnails: the session of September 20.
     let session: Gallery
     /// 180 photos on an external disk (unplugged in the sidebar render).
     let wedding: Gallery
     /// 24 photos, never sorted, no thumbnail yet.
     let forest: Gallery
+    /// The controllers given to the views, kept here so a render can put them in a given state.
+    let exportController = ExportController()
+    let availabilityMonitor: GalleryAvailabilityMonitor
 
     init() throws {
         container = try ModelContainer(
@@ -24,6 +29,7 @@ final class RenderLibrary {
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         store = LibraryStore(modelContainer: container)
+        availabilityMonitor = GalleryAvailabilityMonitor(store: store)
         cache = ThumbnailCache(directory: FileManager.default.temporaryDirectory
             .appending(path: "LinkLensRenderThumbnails-\(UUID().uuidString)", directoryHint: .isDirectory))
         let context = container.mainContext
@@ -33,17 +39,35 @@ final class RenderLibrary {
         wedding = Self.gallery("Mariage Julie & Tom", path: "/Volumes/Photos 2TB/2026/2026-09-12 Mariage", created: start - 86_400 * 8, in: context)
         forest = Self.gallery("Balade en forêt", path: realHomeDirectory() + "/Pictures/Forêt", created: start - 86_400 * 20, in: context)
 
-        let sessionPhotos = Self.photos(count: 52, prefix: "DSC0", firstNumber: 4297, start: start, gallery: session, in: context) { index, photo in
-            photo.cullingVerdictRaw = index % 13 == 0 || index % 4 == 1 && index < 30 ? "keep" : index % 3 == 0 ? "review" : "reject"
-            if index < 48 {
-                photo.burstNumber = index / 4 + 1
-                photo.isBestOfBurst = index % 4 == 1
+        // The real session of September 20 (~/Downloads/photos): 52 RAW files, 12 bursts and two single
+        // photos, 12 / 14 / 26, the best photo of each burst as in the mockup.
+        let sessionPhotos = Self.photos(count: 52, prefix: "DSC0", firstNumber: 4297, start: start, gallery: session, in: context) { _, _ in }
+        var burstNumber = 0
+        var reviewSlots = Set((0..<14).map { $0 * 38 / 14 }) // 14 « À revoir » spread over the 38 other photos
+        var otherIndex = 0
+        for burst in Self.realBursts {
+            let members = sessionPhotos.filter { burst.numbers.contains(Self.number(of: $0)) }
+            if members.count > 1 { burstNumber += 1 }
+            for photo in members {
+                let isBest = members.count > 1 && Self.number(of: photo) == burst.best
+                if members.count > 1 {
+                    photo.burstNumber = burstNumber
+                    photo.isBestOfBurst = isBest
+                }
+                if isBest {
+                    photo.cullingVerdictRaw = "keep"
+                } else if members.count == 1 {
+                    photo.cullingVerdictRaw = "reject" // 04317 and 04335, as in the mockup
+                } else {
+                    photo.cullingVerdictRaw = reviewSlots.remove(otherIndex) != nil ? "review" : "reject"
+                    otherIndex += 1
+                }
+                photo.aestheticsScore = isBest ? 0.8 : 0.3
             }
-            photo.aestheticsScore = Double((index * 37) % 100) / 100
         }
-        Self.balance(sessionPhotos, keep: 12, review: 14, reject: 26)
-        sessionPhotos[7].userVerdictRaw = "keep"
-        sessionPhotos[30].userVerdictRaw = "review"
+        // Two choices of the user: 04311 confirmed « Garder », 04312 put back to « À revoir ».
+        sessionPhotos[14].userVerdictRaw = "keep"
+        sessionPhotos[15].userVerdictRaw = "review"
         session.culledAt = start + 120
 
         let weddingPhotos = Self.photos(count: 180, prefix: "IMG_", firstNumber: 1001, start: start - 86_400 * 8, gallery: wedding, in: context) { index, photo in
@@ -57,9 +81,11 @@ final class RenderLibrary {
         _ = Self.photos(count: 24, prefix: "P10", firstNumber: 100, start: start - 86_400 * 20, gallery: forest, in: context) { _, _ in }
 
         try context.save()
-        // Thumbnails for the first two galleries: the covers and, later, the grid.
-        for (index, photo) in sessionPhotos.enumerated() {
-            try cache.store(Self.drawnPhoto(seed: index), for: photo.id)
+        // Thumbnails: real ones for the session (each photo of a burst gets its best photo's, the
+        // 14 JPEGs of `Fixtures/Thumbnails`), drawn ones for the wedding.
+        for photo in sessionPhotos {
+            let burst = Self.realBursts.first { $0.numbers.contains(Self.number(of: photo)) }
+            try cache.store(try Self.fixtureThumbnail(burst?.best ?? Self.number(of: photo)), for: photo.id)
         }
         for (index, photo) in weddingPhotos.enumerated() where index < 40 {
             try cache.store(Self.drawnPhoto(seed: index + 100), for: photo.id)
@@ -85,16 +111,44 @@ final class RenderLibrary {
         view
             .environment(importController ?? ImportController(store: store))
             .environment(CullingController(store: store))
-            .environment(ExportController())
+            .environment(exportController)
             .environment(CardImportController(importer: CardImporter(store: store)))
             .environment(CardMonitor())
             .environment(DuplicatesController(store: store))
-            .environment(GalleryAvailabilityMonitor(store: store))
+            .environment(availabilityMonitor)
             .environment(\.thumbnailCache, cache)
             .modelContainer(container)
     }
 
     // MARK: - Building
+
+    /// The bursts of the real session, in order: their photo numbers and their best photo (itself for a
+    /// single photo). Counted from the mockup: 3, 2, 5, 7, 3, 1, 6, 5, 3, 3, 1, 5, 5, 3 = 52 photos.
+    private static let realBursts: [(numbers: ClosedRange<Int>, best: Int)] = [
+        (4297...4299, 4298), (4300...4301, 4300), (4302...4306, 4304), (4307...4313, 4311),
+        (4314...4316, 4315), (4317...4317, 4317), (4318...4323, 4320), (4324...4328, 4327),
+        (4329...4331, 4331), (4332...4334, 4332), (4335...4335, 4335), (4336...4340, 4337),
+        (4341...4345, 4342), (4346...4348, 4346),
+    ]
+
+    /// 4311 for « DSC04311.ARW ».
+    private static func number(of photo: Photo) -> Int {
+        Int(photo.relativePath.dropFirst(3).prefix(5)) ?? 0
+    }
+
+    /// One of the real thumbnails copied into the test bundle (512 px, from the probe of ~/Downloads/photos).
+    private static func fixtureThumbnail(_ number: Int) throws -> CGImage {
+        let name = String(format: "DSC%05d", number)
+        let bundle = Bundle(for: RenderLibrary.self)
+        let url = try #require(
+            bundle.url(forResource: name, withExtension: "jpg")
+                ?? bundle.url(forResource: name, withExtension: "jpg", subdirectory: "Thumbnails")
+                ?? bundle.url(forResource: name, withExtension: "jpg", subdirectory: "Fixtures/Thumbnails"),
+            "\(name).jpg missing from the test bundle"
+        )
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+    }
 
     private static func gallery(_ name: String, path: String, created: Date, in context: ModelContext) -> Gallery {
         let gallery = Gallery(name: name, folderPath: path, folderBookmark: Data(), createdAt: created)
@@ -119,15 +173,6 @@ final class RenderLibrary {
             configure(index, photo)
             gallery.photoCount += 1
             return photo
-        }
-    }
-
-    /// Sets the AI verdicts to exact totals, keeping the best of each burst among the keepers.
-    private static func balance(_ photos: [Photo], keep: Int, review: Int, reject: Int) {
-        let bests = photos.filter(\.isBestOfBurst)
-        let others = photos.filter { !$0.isBestOfBurst }
-        for (index, photo) in (bests + others).enumerated() {
-            photo.cullingVerdictRaw = index < keep ? "keep" : index < keep + review ? "review" : "reject"
         }
     }
 

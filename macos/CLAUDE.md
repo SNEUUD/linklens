@@ -88,4 +88,10 @@ TEST_RUNNER_LINKLENS_RENDERS=1 xcodebuild -project macos/LinkLens.xcodeproj -sch
 - PNG clair et sombre dans `~/Library/Containers/fr.chriscrepin.linklens/Data/tmp/LinkLensRenders/`.
 - Données d'exemple en mémoire (`LinkLensTests/Renders/RenderLibrary.swift`) : le vrai catalogue et le vrai cache de miniatures ne sont pas touchés.
 - Ajouter un écran : un `@Test` de plus dans `InterfaceRenderTests.swift`. Détails et limites en tête de `WindowRenderer.swift` (les fenêtres s'affichent quelques secondes pendant les rendus).
+- La galerie « Séance du 20 sept. » reprend la vraie séance (52 photos, 12 rafales) avec 14 vraies miniatures (`LinkLensTests/Fixtures/Thumbnails/`). `WindowRenderer.render(…) { window in … }` permet d'envoyer des touches avant la capture.
+- Le verre (Liquid Glass, matériau) n'est pas rendu fidèlement par la capture : vérifier à l'écran.
 - Ignorés dans la suite normale.
+
+### Piège des tests avec annulation
+
+Avec `UndoManager.groupsByEvent = false`, tout appel qui enregistre une annulation (P/U/X, B…) doit être entre `beginUndoGrouping()` et `endUndoGrouping()`. Sinon AppKit lève une exception : dans l'app hôte des tests, cela donne un plantage dans un `@Query` de la vraie fenêtre, puis des lancements de tests qui restent bloqués sans aucune sortie.
