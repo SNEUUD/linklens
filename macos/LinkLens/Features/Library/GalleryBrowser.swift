@@ -115,8 +115,14 @@ final class GalleryBrowser {
 
     /// ← → in the viewer: previous or next photo, stopping at both ends.
     func showNeighbour(offset: Int) {
-        guard let index = selectedIndex, photoIds.indices.contains(index + offset) else { return }
+        guard hasNeighbour(offset: offset), let index = selectedIndex else { return }
         selection = photoIds[index + offset]
+    }
+
+    /// False at both ends: the viewer's ‹ › buttons are then disabled.
+    func hasNeighbour(offset: Int) -> Bool {
+        guard let index = selectedIndex else { return false }
+        return photoIds.indices.contains(index + offset)
     }
 
     /// Opens the viewer on a photo, or on the selected one. Returns false when nothing is selected.
