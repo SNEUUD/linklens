@@ -95,6 +95,14 @@ enum Palette {
     static let photoBackground = AdaptiveColor(light: 0xDCDCE2, dark: 0x0C0C0E)
     /// Behind the photo in the full-window viewer, like the mockup's `viewer`.
     static let viewer = AdaptiveColor(light: 0xE9E9ED, dark: 0x0F0F11)
+    /// Raised cards of the welcome screen and the secondary capsule buttons, like the mockup's `card`.
+    static let card = AdaptiveColor(light: 0xFFFFFF, dark: 0x232327)
+    /// Text fields and boxes of the card import window, like the mockup's `field`.
+    static let field = AdaptiveColor(light: 0xF4F4F6, dark: 0x2C2C31)
+    /// Pale tints behind an icon or a message, like the mockup's `accentSoft` / `keepSoft`.
+    static let accentSoft = AdaptiveColor(light: 0x005FC4, dark: 0x4AA3FF, lightOpacity: 0.12, darkOpacity: 0.18)
+    static let keepSoft = AdaptiveColor(light: 0x1A7334, dark: 0x45D97A, lightOpacity: 0.10, darkOpacity: 0.12)
+    static let reviewSoft = AdaptiveColor(light: 0x9A4D00, dark: 0xFFAE42, lightOpacity: 0.10, darkOpacity: 0.12)
 
     /// The lightest and darkest backgrounds text is drawn on (window, sidebar, selected chip),
     /// in each mode. The contrast test checks every text colour against all of them.

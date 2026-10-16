@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Main window: galleries in the sidebar, photos of the selected gallery on the right.
 struct ContentView: View {
@@ -16,6 +17,17 @@ struct ContentView: View {
     /// Sidebar shown or not. The full-window viewer hides it and puts it back as it was when it closes.
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
     @State private var visibilityBeforeViewer: NavigationSplitViewVisibility?
+    /// A folder is being dragged over the window.
+    @State private var isDropTargeted: Bool
+    /// Something was dropped that is not one folder: the alert says what to do instead.
+    @State private var dropRejection: FolderDrop.Rejection?
+
+    /// `isDropTargeted` lets the interface renders show the window during a drag.
+    init(isDropTargeted: Bool = false) {
+        _isDropTargeted = State(initialValue: isDropTargeted)
+    }
+
+    private var isViewerOpen: Bool { visibilityBeforeViewer != nil }
 
     var body: some View {
         // `@Bindable` gives two-way bindings (`$…`) to the properties of an `@Observable` object.
@@ -39,6 +51,9 @@ struct ContentView: View {
             )
             // No sidebar button while the viewer takes the whole window: « ‹ Grille » brings it back.
             .toolbar(removing: visibilityBeforeViewer == nil ? nil : .sidebarToggle)
+            // Last modifier of the column: placed before `.toolbar(removing:)`, the width was ignored and the
+            // sidebar opened at its narrowest (since batch 4).
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
         } detail: {
             // `Group` wraps the branches so one modifier (the alert) applies to all of them.
             Group {
@@ -46,14 +61,7 @@ struct ContentView: View {
                     GalleryDetailView(gallery: gallery, thumbnailCache: thumbnailCache, onViewerChange: viewerChanged)
                         .id(gallery.id)
                 } else if galleries.isEmpty {
-                    ContentUnavailableView {
-                        Label("Aucune galerie", systemImage: "photo.on.rectangle.angled")
-                    } description: {
-                        Text("Importez une carte SD ou un dossier de photos pour commencer.")
-                    } actions: {
-                        ImportMenuItems(showsShortcuts: false, cardTitle: "Importer une carte SD…", folderTitle: "Ajouter un dossier…")
-                    }
-                    .toolbar { ImportToolbarMenu() }
+                    WelcomeView(isDropTargeted: isDropTargeted)
                 } else {
                     ContentUnavailableView("Sélectionnez une galerie", systemImage: "sidebar.left")
                         .toolbar { ImportToolbarMenu() }
@@ -70,6 +78,89 @@ struct ContentView: View {
             } message: {
                 Text(cullingController.errorMessage ?? "")
             }
+        }
+        .overlay {
+            if isDropTargeted {
+                FolderDropHighlight(showsMessage: !galleries.isEmpty)
+                    // Around the whole window, toolbar included: the drop works anywhere in it.
+                    .ignoresSafeArea()
+            }
+        }
+        // A folder dragged from the Finder, anywhere in the window (sidebar included). Not while the
+        // viewer takes the whole window: closing it first would lose the photo being looked at.
+        // `.onDrop` is like `onDragOver` + `onDrop` on a React element; `isTargeted` follows the hovering.
+        .onDrop(of: isViewerOpen ? [] : [.fileURL], isTargeted: $isDropTargeted) { providers in
+            Task { await handleDrop(providers) }
+            return true
+        }
+        .onChange(of: isDropTargeted) { _, isTargeted in
+            if isTargeted {
+                AccessibilityNotification.Announcement(String(localized: "Déposez le dossier pour l'ajouter")).post()
+            }
+        }
+        .sheet(isPresented: $isDuplicatesSheetPresented) {
+            DuplicatesSheet()
+                .environment(duplicatesController)
+                .environment(availabilityMonitor)
+        }
+        .focusedSceneValue(\.showDuplicates, galleries.isEmpty ? nil : MenuAction { isDuplicatesSheetPresented = true })
+        // A gallery added (or removed): its disk is checked, and its name remembered (F9).
+        .onChange(of: galleries.map(\.id)) { availabilityMonitor.refresh() }
+        .sheet(isPresented: Binding(
+            get: { cardImportController.isSheetPresented },
+            set: { if !$0 { cardImportController.close() } }
+        )) {
+            CardImportSheet()
+                .environment(cardImportController)
+                .environment(\.thumbnailCache, thumbnailCache)
+        }
+        .alert(
+            "Import impossible",
+            isPresented: Binding(
+                get: { cardImportController.errorMessage != nil },
+                set: { if !$0 { cardImportController.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(cardImportController.errorMessage ?? "")
+        }
+        .alert(
+            "Indexation impossible",
+            isPresented: Binding(
+                get: { importController.errorMessage != nil },
+                set: { if !$0 { importController.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(importController.errorMessage ?? "")
+        }
+        .alert(
+            dropRejection?.title ?? "",
+            isPresented: Binding(
+                get: { dropRejection != nil },
+                set: { if !$0 { dropRejection = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(dropRejection?.message ?? "")
+        }
+    }
+
+    /// One folder: a new gallery indexed in place (F2). The card of a camera: the card import (F1).
+    /// Anything else: an alert that says what to drop instead.
+    private func handleDrop(_ providers: [NSItemProvider]) async {
+        let urls = await FolderDrop.fileURLs(from: providers)
+        let items = urls.map { (url: $0, item: FolderDrop.item(at: $0)) }
+        switch FolderDrop.decide(items) {
+        case .indexFolder(let folder):
+            importController.indexDroppedFolder(folder)
+        case .importCard(let card):
+            cardImportController.importDroppedCard(card)
+        case .rejected(let rejection):
+            dropRejection = rejection
         }
     }
 

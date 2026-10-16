@@ -85,6 +85,7 @@ Tests avec **Swift Testing** pour la logique (scores, doublons, empreintes, conv
 TEST_RUNNER_LINKLENS_RENDERS=1 xcodebuild -project macos/LinkLens.xcodeproj -scheme LinkLens -destination 'platform=macOS' test -only-testing:LinkLensTests/InterfaceRenderTests
 ```
 
+- Un seul écran : ajouter `TEST_RUNNER_LINKLENS_RENDERS_ONLY=accueil,import-carte` (préfixes des noms ; `-only-testing` ne sélectionne pas les tests à arguments).
 - PNG clair et sombre dans `~/Library/Containers/fr.chriscrepin.linklens/Data/tmp/LinkLensRenders/`.
 - Données d'exemple en mémoire (`LinkLensTests/Renders/RenderLibrary.swift`) : le vrai catalogue et le vrai cache de miniatures ne sont pas touchés.
 - Ajouter un écran : un `@Test` de plus dans `InterfaceRenderTests.swift`. Détails et limites en tête de `WindowRenderer.swift` (les fenêtres s'affichent quelques secondes pendant les rendus).

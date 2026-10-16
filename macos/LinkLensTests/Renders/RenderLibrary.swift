@@ -101,27 +101,45 @@ final class RenderLibrary {
 
     var galleries: [Gallery] { [session, wedding, forest] }
 
+    /// The same catalogue emptied: the first launch.
+    static func empty() throws -> RenderLibrary {
+        let library = try RenderLibrary()
+        for gallery in library.galleries { library.container.mainContext.delete(gallery) }
+        try library.container.mainContext.save()
+        return library
+    }
+
     /// The real main window, with the controllers it needs, showing `selectedGallery`.
-    func mainWindow(selecting selectedGallery: Gallery?) -> some View {
+    /// `isDropTargeted`: as while a folder is dragged over the window. `cardImport`: a controller
+    /// prepared by the test (the card import window is shown when it has a card).
+    func mainWindow(selecting selectedGallery: Gallery?, isDropTargeted: Bool = false, cardImport: CardImportController? = nil) -> some View {
         let importController = ImportController(store: store)
         importController.selectedGalleryId = selectedGallery?.id
-        return withEnvironment(ContentView(), importController: importController)
+        return withEnvironment(ContentView(isDropTargeted: isDropTargeted), importController: importController, cardImport: cardImport)
             .frame(minWidth: 1080, minHeight: 560)
     }
 
     /// Gives `view` every object the app provides at its root, with this catalogue and cache.
-    func withEnvironment(_ view: some View, importController: ImportController? = nil) -> some View {
+    func withEnvironment(_ view: some View, importController: ImportController? = nil, cardImport: CardImportController? = nil) -> some View {
         view
             .environment(importController ?? ImportController(store: store))
             .environment(CullingController(store: store))
             .environment(exportController)
-            .environment(CardImportController(importer: CardImporter(store: store)))
+            .environment(cardImport ?? makeCardImportController())
             .environment(CardMonitor())
             .environment(DuplicatesController(store: store))
             .environment(availabilityMonitor)
             .environment(detailsController)
             .environment(\.thumbnailCache, cache)
             .modelContainer(container)
+    }
+
+    /// Never the app's real default location: its own key in the user defaults.
+    func makeCardImportController() -> CardImportController {
+        CardImportController(
+            importer: CardImporter(store: store),
+            destinations: ImportDestinationStore(key: "renders.cardImport.defaultDestination")
+        )
     }
 
     // MARK: - Building
@@ -234,16 +252,23 @@ final class RenderLibrary {
         Int(photo.relativePath.dropFirst(3).prefix(5)) ?? 0
     }
 
-    /// One of the real thumbnails copied into the test bundle (512 px, from the probe of ~/Downloads/photos).
-    private static func fixtureThumbnail(_ number: Int) throws -> CGImage {
+    /// The 14 real thumbnails of the test bundle, by photo number.
+    static let fixtureNumbers = [4298, 4300, 4304, 4311, 4315, 4317, 4320, 4327, 4331, 4332, 4335, 4337, 4342, 4346]
+
+    static func fixtureThumbnailURL(_ number: Int) throws -> URL {
         let name = String(format: "DSC%05d", number)
         let bundle = Bundle(for: RenderLibrary.self)
-        let url = try #require(
+        return try #require(
             bundle.url(forResource: name, withExtension: "jpg")
                 ?? bundle.url(forResource: name, withExtension: "jpg", subdirectory: "Thumbnails")
                 ?? bundle.url(forResource: name, withExtension: "jpg", subdirectory: "Fixtures/Thumbnails"),
             "\(name).jpg missing from the test bundle"
         )
+    }
+
+    /// One of the real thumbnails copied into the test bundle (512 px, from the probe of ~/Downloads/photos).
+    private static func fixtureThumbnail(_ number: Int) throws -> CGImage {
+        let url = try fixtureThumbnailURL(number)
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
     }

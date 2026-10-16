@@ -32,11 +32,10 @@ struct InterfaceRenderTests {
         )
     }
 
+    /// The welcome screen in a small window: it scrolls instead of growing the window.
     @Test(arguments: WindowRenderer.Appearance.allCases)
     func emptyLibrary(appearance: WindowRenderer.Appearance) async throws {
-        let library = try RenderLibrary()
-        for gallery in library.galleries { library.container.mainContext.delete(gallery) }
-        try library.container.mainContext.save()
+        let library = try RenderLibrary.empty()
         try await WindowRenderer.render(
             library.mainWindow(selecting: nil),
             named: "fenetre-vide",
@@ -242,6 +241,136 @@ struct InterfaceRenderTests {
                 WindowRenderer.pressRightArrow(in: window)
                 WindowRenderer.press(keyCode: 49, characters: " ", in: window)
             }
+        }
+    }
+
+    // MARK: - Batch 5: welcome, drop, card import window
+
+    /// First launch: no gallery, the welcome screen of the mockup (1440 × 900 like Accueil.dc.html).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func welcome(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary.empty()
+        try await WindowRenderer.render(library.mainWindow(selecting: nil), named: "accueil", size: CGSize(width: 1440, height: 900), appearance: appearance)
+    }
+
+    /// A folder dragged over the welcome screen: the drop zone and the window light up.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func welcomeDuringDrop(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary.empty()
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: nil, isDropTargeted: true),
+            named: "accueil-glisser", size: CGSize(width: 1440, height: 900), appearance: appearance
+        )
+    }
+
+    /// A folder dragged over a gallery: the frame and the message in the middle.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func gridDuringDrop(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session, isDropTargeted: true),
+                named: "grille-glisser", size: CGSize(width: 1280, height: 800), appearance: appearance
+            )
+        }
+    }
+
+    /// The card of the mockup (10 photos with real thumbnails, 1 video), the session name typed.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func cardImportForm(appearance: WindowRenderer.Appearance) async throws {
+        try await renderCardImport(named: "import-carte", appearance: appearance) { controller, _ in
+            controller.sessionName = "Mariage Julie & Tom"
+            let pictures = URL(filePath: realHomeDirectory(), directoryHint: .isDirectory).appending(path: "Pictures/LinkLens")
+            controller.showForRenders(controller.stage, destination: ImportDestination(url: pictures, bookmark: Data()))
+        }
+    }
+
+    /// During the copy: 6 files of 11 copied and checked.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func cardImportProgress(appearance: WindowRenderer.Appearance) async throws {
+        try await renderCardImport(named: "import-carte-progression", appearance: appearance) { controller, card in
+            let bytes = card.totalBytes
+            controller.showForRenders(.importing(card), progress: CardImportProgress(
+                phase: .copying, completedFiles: 6, totalFiles: card.files.count,
+                completedBytes: bytes * 6 / 11, totalBytes: bytes, currentFile: "DSC04320.JPG"
+            ))
+        }
+    }
+
+    /// A real import of the fake card into a temporary location: « Vous pouvez formater la carte ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func cardImportFinished(appearance: WindowRenderer.Appearance) async throws {
+        let destination = FileManager.default.temporaryDirectory.appending(path: "LinkLensRenderImport-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: destination) }
+        try await renderCardImport(named: "import-carte-terminee", appearance: appearance) { controller, _ in
+            controller.sessionName = "Mariage Julie & Tom"
+            controller.showForRenders(controller.stage, destination: ImportDestination(url: destination, bookmark: try FolderBookmark.createReadWrite(for: destination)))
+            controller.startImport()
+            await controller.waitUntilFinished()
+            guard case .finished(let report) = controller.stage else {
+                Issue.record("Import not finished: \(controller.stage), \(controller.errorMessage ?? "")")
+                return
+            }
+            #expect(report.canFormatCard)
+        }
+    }
+
+    /// One copy differs from the original: « Ne formatez pas la carte ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func cardImportIncomplete(appearance: WindowRenderer.Appearance) async throws {
+        try await renderCardImport(named: "import-carte-incomplet", appearance: appearance) { controller, card in
+            let folder = URL(filePath: "/tmp/2026/2026-09-20 Mariage Julie & Tom", directoryHint: .isDirectory)
+            let copied = card.files.dropFirst().map { file in
+                CopiedFile(sourcePath: file.relativePath, destination: folder.appending(path: file.url.lastPathComponent), sha256: "")
+            }
+            controller.showForRenders(.finished(CardImportReport(
+                cardName: card.name, sessionFolder: folder, sessionPath: "2026/2026-09-20 Mariage Julie & Tom",
+                copiedFiles: Array(copied),
+                failures: [CardImportFailure(relativePath: card.files[0].relativePath, reason: .mismatch)],
+                notImported: [], galleryId: nil, indexingError: nil
+            )))
+        }
+    }
+
+    /// A fake card in a temporary folder (10 real thumbnails as photos, an empty MP4), read by the real
+    /// scanner after a « drop »; `configure` puts the window in the state to render.
+    private func renderCardImport(
+        named name: String,
+        appearance: WindowRenderer.Appearance,
+        configure: (CardImportController, CardContents) async throws -> Void
+    ) async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "LinkLensRenderCard-\(UUID().uuidString)/SDTEST", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let photos = root.appending(path: "DCIM/100MSDCF", directoryHint: .isDirectory)
+        let clips = root.appending(path: "PRIVATE/M4ROOT/CLIP", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: photos, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        // 20 Sept. 2026, 14:40 in Paris: the thumbnails have no EXIF date, the file date is used.
+        let taken = Date(timeIntervalSince1970: 1_789_908_057)
+        for (index, number) in RenderLibrary.fixtureNumbers.prefix(10).enumerated() {
+            let file = photos.appending(path: String(format: "DSC%05d.JPG", number))
+            try FileManager.default.copyItem(at: try RenderLibrary.fixtureThumbnailURL(number), to: file)
+            try FileManager.default.setAttributes([.modificationDate: taken.addingTimeInterval(Double(index) * 40)], ofItemAtPath: file.path)
+        }
+        let clip = clips.appending(path: "C0001.MP4")
+        try Data(count: 4_096).write(to: clip)
+        try FileManager.default.setAttributes([.modificationDate: taken.addingTimeInterval(600)], ofItemAtPath: clip.path)
+
+        let library = try RenderLibrary()
+        let controller = library.makeCardImportController()
+        controller.importDroppedCard(root)
+        await controller.waitUntilFinished()
+        guard case .ready(let card) = controller.stage else {
+            Issue.record("Card not read: \(controller.errorMessage ?? "")")
+            return
+        }
+        try await configure(controller, card)
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session, cardImport: controller),
+                named: name, size: CGSize(width: 1440, height: 900), appearance: appearance, settle: .seconds(3)
+            )
         }
     }
 

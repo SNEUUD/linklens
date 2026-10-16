@@ -37,6 +37,13 @@ enum WindowRenderer {
         settle: Duration = .seconds(2),
         prepare: (@MainActor (NSWindow) async throws -> Void)? = nil
     ) async throws -> URL {
+        // `TEST_RUNNER_LINKLENS_RENDERS_ONLY=accueil,import-carte` renders only the names starting with
+        // one of these (`-only-testing` does not select the tests that take arguments).
+        let url = outputDirectory.appending(path: "\(name)-\(appearance.rawValue).png")
+        if let only = ProcessInfo.processInfo.environment["LINKLENS_RENDERS_ONLY"],
+           !only.split(separator: ",").contains(where: { name.hasPrefix($0) }) {
+            return url
+        }
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -95,7 +102,6 @@ enum WindowRenderer {
         }
 
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-        let url = outputDirectory.appending(path: "\(name)-\(appearance.rawValue).png")
         try png.write(to: url)
         print("Render: \(url.path)")
         return url
@@ -122,11 +128,31 @@ enum WindowRenderer {
     /// permission. The function is hidden from Swift since the macOS 15 SDK (Apple wants
     /// ScreenCaptureKit, which asks for that permission), so it is looked up by name; nil if missing.
     private static func composited(_ window: NSWindow) -> CGImage? {
+        if let sheet = window.attachedSheet {
+            return composited(window, with: sheet)
+        }
         typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
         guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil }
         let createImage = unsafeBitCast(symbol, to: CreateImage.self)
         let includingWindow: UInt32 = 1 << 3 // kCGWindowListOptionIncludingWindow
         let options: UInt32 = (1 << 0) | (1 << 3) // boundsIgnoreFraming | bestResolution
         return createImage(.null, includingWindow, UInt32(window.windowNumber), options)?.takeRetainedValue()
+    }
+
+    /// The window with the sheet shown over it (the card import window): everything on screen at or
+    /// above the window, inside its frame. The renders' window floats above the other apps, so only
+    /// its own sheet can be there.
+    private static func composited(_ window: NSWindow, with sheet: NSWindow) -> CGImage? {
+        typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage"),
+              let screenHeight = NSScreen.screens.first?.frame.height
+        else { return nil }
+        let createImage = unsafeBitCast(symbol, to: CreateImage.self)
+        // Quartz counts y from the top of the main screen, AppKit from the bottom.
+        let frame = window.frame
+        let bounds = CGRect(x: frame.minX, y: screenHeight - frame.maxY, width: frame.width, height: frame.height)
+        let aboveAndIncluding: UInt32 = (1 << 1) | (1 << 3) // onScreenAboveWindow | includingWindow
+        let options: UInt32 = (1 << 0) | (1 << 3) // boundsIgnoreFraming | bestResolution
+        return createImage(bounds, aboveAndIncluding, UInt32(window.windowNumber), options)?.takeRetainedValue()
     }
 }

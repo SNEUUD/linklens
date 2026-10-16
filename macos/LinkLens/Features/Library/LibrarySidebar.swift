@@ -36,19 +36,24 @@ struct LibrarySidebar: View {
                     .tag(gallery.id)
                 }
                 if galleries.isEmpty {
+                    // First launch: where the sessions will go. The welcome screen next to it has the
+                    // buttons, so « Ajouter une galerie… » and the tools only come with the first gallery.
                     Text("Vos séances apparaîtront ici, avec leur couverture et l'avancement du tri.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        .lineSpacing(2)
                         .lineLimit(2...4)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(Spacing.regular)
+                        .padding(.horizontal, Spacing.regular)
+                        .padding(.vertical, Spacing.large)
                         .overlay(
                             RoundedRectangle(cornerRadius: Radius.card)
-                                .strokeBorder(.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                                .strokeBorder(Color.primary.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         )
                         .padding(.vertical, Spacing.xSmall)
+                } else {
+                    AddGalleryButton()
                 }
-                AddGalleryButton()
             }
 
             if !cards.isEmpty {
@@ -63,28 +68,29 @@ struct LibrarySidebar: View {
                 }
             }
 
-            Section("Outils") {
-                Button(action: onShowDuplicates) {
-                    HStack(spacing: Spacing.regular) {
-                        Image(systemName: "square.on.square")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                            Text("Doublons")
-                                .fontWeight(.medium)
-                            Text("Dans toutes les galeries")
-                                .font(.caption)
+            if !galleries.isEmpty {
+                Section("Outils") {
+                    Button(action: onShowDuplicates) {
+                        HStack(spacing: Spacing.regular) {
+                            Image(systemName: "square.on.square")
+                                .font(.title3)
                                 .foregroundStyle(.secondary)
+                                .frame(width: 22)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                Text("Doublons")
+                                    .fontWeight(.medium)
+                                Text("Dans toutes les galeries")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .help("Rechercher les fichiers identiques dans toutes vos galeries")
+                    .accessibilityLabel("Doublons dans toutes les galeries")
                 }
-                .buttonStyle(.plain)
-                .disabled(galleries.isEmpty)
-                .help("Rechercher les fichiers identiques dans toutes vos galeries")
-                .accessibilityLabel("Doublons dans toutes les galeries")
             }
         }
         .listStyle(.sidebar)
