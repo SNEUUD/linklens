@@ -8,6 +8,9 @@ struct GalleryEntry: Identifiable, Equatable, Sendable {
     /// Position of that photo in the list given to `BurstStacks.entries`.
     var photoIndex: Int
     var burst: BurstPlacement?
+    /// True under a verdict filter for a photo the user sorted out of it: it stays in place, dimmed,
+    /// until the filter changes (see `VerdictFilter`), so nothing moves under the cursor.
+    var isOutsideFilter = false
 
     var id: UUID { photoId }
 }
@@ -24,6 +27,9 @@ struct BurstPlacement: Equatable, Sendable {
     /// True when the burst's best photo was chosen by the user (B key), false when it is the AI's.
     /// The same for every photo of the burst.
     var isCoverChosenByUser = false
+    /// True under a verdict filter: the photo is shown on its own, among the other matching photos,
+    /// without the rest of its burst (no stack, nothing to open or close).
+    var isShownAlone = false
 }
 
 extension BurstPlacement {
@@ -36,8 +42,16 @@ extension BurstPlacement {
     /// Spoken by VoiceOver and shown next to the star.
     var starDescription: String {
         isCoverChosenByUser
-            ? String(localized: "Meilleure photo de la rafale, votre choix")
-            : String(localized: "Meilleure photo de la rafale")
+            ? String(localized: "Meilleure de la rafale, votre choix")
+            : String(localized: "Meilleure de la rafale")
+    }
+
+    /// Read by VoiceOver with the photo's name and verdict: « Rafale de 7 photos, repliée ».
+    var accessibilityDescription: String {
+        if isShownAlone { return String(localized: "Rafale de \(count) photos") }
+        return isExpanded
+            ? String(localized: "Rafale de \(count) photos, ouverte")
+            : String(localized: "Rafale de \(count) photos, repliée")
     }
 }
 
@@ -51,6 +65,8 @@ enum BurstStacks {
         var isBestOfBurst = false
         /// When the user chose this photo as the best of its burst, nil if they did not.
         var bestChosenAt: Date?
+        /// The verdict shown (the user's choice, otherwise the AI's), for the verdict filters.
+        var verdict: CullingVerdict?
     }
 
     /// - Parameters:
@@ -106,5 +122,31 @@ enum BurstStacks {
     /// The best photo chosen by F3; the first one if none is marked (e.g. a failed analysis).
     private static func aiCover(of burst: [Int], in photos: [Input]) -> Int {
         burst.first { photos[$0].isBestOfBurst } ?? burst[0]
+    }
+}
+
+extension BurstStacks {
+    /// What a verdict filter shows. « Toutes »: the bursts stacked as usual. Any other filter: every
+    /// matching photo one by one, bursts unfolded, so each « À revoir » photo of a burst can be checked.
+    ///
+    /// - Parameter retained: photos to keep showing even if they no longer match (sorted by the user
+    ///   while this filter is on). They come back marked `isOutsideFilter`.
+    static func entries(
+        for photos: [Input],
+        expanded: Set<Int>,
+        filter: VerdictFilter,
+        retaining retained: Set<UUID> = []
+    ) -> [GalleryEntry] {
+        guard filter != .all else { return entries(for: photos, expanded: expanded) }
+        // Every burst open: each photo gets its own entry, still placed in its burst's block.
+        let everyBurst = Set(photos.compactMap(\.burstNumber))
+        return entries(for: photos, expanded: everyBurst).compactMap { entry in
+            let matches = filter.matches(photos[entry.photoIndex].verdict)
+            guard matches || retained.contains(entry.photoId) else { return nil }
+            var shown = entry
+            shown.burst?.isShownAlone = true
+            shown.isOutsideFilter = !matches
+            return shown
+        }
     }
 }

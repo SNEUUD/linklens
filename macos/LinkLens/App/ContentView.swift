@@ -10,6 +10,7 @@ struct ContentView: View {
     @Environment(CardMonitor.self) private var cardMonitor
     @Environment(DuplicatesController.self) private var duplicatesController
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
+    @Environment(\.thumbnailCache) private var thumbnailCache
     @Query(sort: \Gallery.createdAt, order: .reverse) private var galleries: [Gallery]
     @State private var isDuplicatesSheetPresented = false
 
@@ -37,7 +38,7 @@ struct ContentView: View {
             // `Group` wraps the branches so one modifier (the alert) applies to all of them.
             Group {
                 if let gallery = galleries.first(where: { $0.id == importController.selectedGalleryId }) {
-                    GalleryDetailView(gallery: gallery)
+                    GalleryDetailView(gallery: gallery, thumbnailCache: thumbnailCache)
                         .id(gallery.id)
                 } else if galleries.isEmpty {
                     ContentUnavailableView {

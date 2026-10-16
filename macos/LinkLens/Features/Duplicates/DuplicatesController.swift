@@ -38,6 +38,8 @@ final class DuplicatesController {
     @ObservationIgnored private var trashTask: Task<Void, Never>?
 
     private(set) var isScanning = false
+    /// When the running search started, for the progress pill.
+    private(set) var scanStartedAt: Date?
     private(set) var isMovingFiles = false
 
     init(store: LibraryStore, requestWriteAccess: @escaping @MainActor (GalleryLocation) -> URL? = DuplicatesController.askForWriteAccess) {
@@ -52,6 +54,7 @@ final class DuplicatesController {
     func scan() {
         guard !isScanning, !isMovingFiles else { return }
         isScanning = true
+        scanStartedAt = .now
         scanTask = Task {
             do {
                 report = try await scanner.scan { [weak self] progress in

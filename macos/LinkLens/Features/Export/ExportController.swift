@@ -10,6 +10,9 @@ final class ExportController {
     private(set) var progress: ExportProgress?
     /// Result of the last export, shown until the user closes it.
     private(set) var summary: ExportSummary?
+    /// When the running export started, then when it ended: the progress pill shows the most recent work.
+    private(set) var startedAt: Date?
+    private(set) var finishedAt: Date?
 
     @ObservationIgnored private let exporter: PhotoExporter
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -46,6 +49,7 @@ final class ExportController {
     func start(_ request: ExportRequest) {
         guard !isExporting else { return }
         summary = nil
+        startedAt = .now
         task = Task {
             do {
                 summary = try await exporter.export(request) { [weak self] progress in
@@ -55,6 +59,7 @@ final class ExportController {
                 errorMessage = error.localizedDescription
             }
             progress = nil
+            finishedAt = .now
             task = nil
         }
     }
@@ -72,6 +77,15 @@ final class ExportController {
     func dismissSummary() {
         summary = nil
     }
+
+    #if DEBUG
+    /// Interface renders only (`InterfaceRenderTests`): shows an export in progress without exporting.
+    /// `#if DEBUG` keeps this out of the version sent to the App Store.
+    func showProgressForRenders(_ progress: ExportProgress, startedAt: Date) {
+        self.progress = progress
+        self.startedAt = startedAt
+    }
+    #endif
 
     /// Opens the destination in the Finder with the exported files selected.
     func revealExportedFiles() {

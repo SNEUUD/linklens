@@ -221,8 +221,8 @@ struct ThumbnailLoaderTests {
 struct GridLayoutTests {
     @Test func fitsAsManyColumnsAsTheWidthAllows() {
         #expect(GridLayout.columnCount(forWidth: 100) == 1)
-        #expect(GridLayout.columnCount(forWidth: 400) == 2)
-        #expect(GridLayout.columnCount(forWidth: 800) == 4)
+        #expect(GridLayout.columnCount(forWidth: 420) == 2)
+        #expect(GridLayout.columnCount(forWidth: 820) == 4)
     }
 
     @Test func arrowsMoveAndStopAtTheEdges() {

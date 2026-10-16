@@ -17,16 +17,21 @@ struct DisplayedPhoto: Identifiable {
 
 extension Photo {
     var burstInput: BurstStacks.Input {
-        BurstStacks.Input(id: id, burstNumber: burstNumber, isBestOfBurst: isBestOfBurst, bestChosenAt: bestOfBurstChosenAt)
+        BurstStacks.Input(
+            id: id, burstNumber: burstNumber, isBestOfBurst: isBestOfBurst, bestChosenAt: bestOfBurstChosenAt, verdict: verdict
+        )
     }
 }
 
 /// The photos of a gallery, as a grid of thumbnails or a table, a large viewer, the AI sorting (F3),
-/// the bursts shown as stacks (F4) and the export (F6).
+/// the bursts shown as stacks (F4) and the export (F6). Above the photos, the verdict filters; at the
+/// bottom, the progress pill of whatever runs for this gallery.
 struct GalleryDetailView: View {
     let gallery: Gallery
+    @Environment(ImportController.self) private var importController
     @Environment(CullingController.self) private var cullingController
     @Environment(ExportController.self) private var exportController
+    @Environment(DuplicatesController.self) private var duplicatesController
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
@@ -35,17 +40,26 @@ struct GalleryDetailView: View {
     @AppStorage("galleryLayout") private var layout = GalleryLayout.grid
     /// Whether the inspector is shown (batch 3), remembered between launches.
     @AppStorage("isInspectorShown") private var isInspectorShown = true
+    /// Smallest width of a thumbnail, the same for every gallery (slider and ⌘+ / ⌘−).
+    @AppStorage(ThumbnailSize.storageKey) private var thumbnailWidth = ThumbnailSize.standard
     @State private var browser: GalleryBrowser
     /// Manual sorting (P / U / X / A) with undo, shared by the grid, the table and the viewer.
     @State private var sorter: ManualSorter
     // `@State` keeps the same loader for the whole life of the view (like `useRef`), one per gallery.
-    @State private var loader = ThumbnailLoader()
+    @State private var loader: ThumbnailLoader
     @State private var revealError: String?
     @State private var isExportSheetPresented = false
+    /// Where the filter of each gallery is remembered.
+    private let filterStore: VerdictFilterStore
 
-    init(gallery: Gallery) {
+    /// - Parameter thumbnailCache: the app's cache; the interface renders pass one of their own.
+    init(gallery: Gallery, thumbnailCache: ThumbnailCache = .standard, filterStore: VerdictFilterStore = VerdictFilterStore()) {
         self.gallery = gallery
+        self.filterStore = filterStore
+        _loader = State(initialValue: ThumbnailLoader(cache: thumbnailCache))
         let browser = GalleryBrowser()
+        // The filter chosen last time in this gallery.
+        browser.setFilter(filterStore.filter(galleryId: gallery.id))
         _browser = State(initialValue: browser)
         _sorter = State(initialValue: ManualSorter(browser: browser))
         let galleryId = gallery.id
@@ -64,18 +78,37 @@ struct GalleryDetailView: View {
     }
 
     var body: some View {
-        content
-        // `safeAreaInset` pins a bar above the photos, which scroll under it.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                if !availability.canUseOriginals {
-                    UnavailableGalleryBar(availability: availability)
-                }
-                CullingStatusBar(gallery: gallery, photos: photos)
+        VStack(spacing: 0) {
+            if !availability.canUseOriginals {
+                UnavailableGalleryBar(availability: availability)
+            }
+            if !photos.isEmpty {
+                VerdictFilterBar(
+                    filter: browser.filter,
+                    counts: filterCounts,
+                    onSelect: selectFilter,
+                    thumbnailWidth: showsGrid ? $thumbnailWidth : nil
+                )
+            }
+            content
+                .frame(maxHeight: .infinity)
+        }
+        // `safeAreaInset` pins the pill over the bottom of the photos: they scroll under it, and the
+        // last row can still be scrolled above it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let pill = ActivityPill.content(for: activities) {
+                ActivityPillView(content: pill, onCancel: cancel, onRevealExport: exportController.revealExportedFiles)
+                    .padding(.bottom, 18)
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            ExportStatusBar(galleryId: gallery.id)
+        .animation(.easeInOut(duration: 0.2), value: activities.map(\.kind))
+        // VoiceOver says when something starts or ends, like an `aria-live` region.
+        .onChange(of: activities.map(\.kind)) { old, new in
+            for activity in activities where !old.contains(activity.kind) {
+                AccessibilityNotification.Announcement(activity.title).post()
+            }
         }
         .navigationTitle(gallery.name)
         .navigationSubtitle(subtitle)
@@ -98,8 +131,9 @@ struct GalleryDetailView: View {
             }
             InspectorToggle(isOn: $isInspectorShown)
         }
-        // Publishes the actions of this gallery to the « Galerie » menu of the menu bar.
+        // Publishes the actions of this gallery to the « Galerie » and « Présentation » menus.
         .focusedSceneValue(\.galleryMenuActions, menuActions)
+        .focusedSceneValue(\.galleryPresentation, presentationActions)
         // `.sheet` shows a modal attached to the window while the Boolean is true (like `<Modal open={…}>`).
         .sheet(isPresented: $isExportSheetPresented) {
             ExportSheet(gallery: gallery, photos: photos, selectedPhotoId: browser.selection)
@@ -122,7 +156,7 @@ struct GalleryDetailView: View {
         }
         // Again after a sorting: the bursts are stored on the photos.
         .onChange(of: photos.map(\.burstInput), initial: true) { _, inputs in browser.setPhotos(inputs) }
-        .onChange(of: gallery.culledAt) { browser.collapseAllBursts() }
+        .onChange(of: gallery.culledAt) { browser.gallerySortedAgain() }
         .onChange(of: layout) { browser.closeViewer() }
         .alert(
             "Dossier inaccessible",
@@ -186,6 +220,66 @@ struct GalleryDetailView: View {
         )
     }
 
+    /// The grid is on screen (the size slider and ⌘+ / ⌘− only apply to it).
+    private var showsGrid: Bool {
+        layout == .grid && !browser.isViewerOpen
+    }
+
+    private var filterCounts: VerdictFilterCounts {
+        VerdictFilterCounts(photos.map(\.verdict))
+    }
+
+    /// A click on a filter or ⌘1–⌘4: shows it (again) and remembers it for this gallery.
+    private func selectFilter(_ filter: VerdictFilter) {
+        browser.setFilter(filter)
+        filterStore.setFilter(filter, galleryId: gallery.id)
+    }
+
+    /// The filters and thumbnail sizes of the « Présentation » menu.
+    private var presentationActions: GalleryPresentationActions {
+        GalleryPresentationActions(
+            filter: browser.filter,
+            counts: filterCounts,
+            select: { selectFilter($0) },
+            canResizeThumbnails: showsGrid
+        )
+    }
+
+    /// What runs for this gallery now (and the duplicate search, which covers every gallery).
+    private var activities: [Activity] {
+        let galleryId = gallery.id
+        var activities: [Activity] = []
+        if let progress = importController.progress, progress.galleryId == galleryId {
+            activities.append(.indexing(progress, startedAt: importController.startedAt ?? .distantPast))
+        }
+        if cullingController.runningGalleryId == galleryId {
+            let progress = cullingController.progress?.galleryId == galleryId ? cullingController.progress : nil
+            activities.append(.culling(progress, isQueued: false, startedAt: cullingController.startedAt))
+        } else if cullingController.isQueued(galleryId: galleryId) {
+            activities.append(.culling(nil, isQueued: true, startedAt: nil))
+        }
+        if let progress = exportController.progress, progress.galleryId == galleryId {
+            activities.append(.export(progress, startedAt: exportController.startedAt ?? .distantPast))
+        } else if let summary = exportController.summary, summary.galleryId == galleryId {
+            activities.append(.exportFinished(summary, at: exportController.finishedAt ?? .distantPast))
+        }
+        if duplicatesController.isScanning {
+            activities.append(.duplicates(duplicatesController.progress, startedAt: duplicatesController.scanStartedAt ?? .distantPast))
+        }
+        return activities
+    }
+
+    /// « Annuler » (or « Fermer ») in the progress pill.
+    private func cancel(_ kind: Activity.Kind) {
+        switch kind {
+        case .indexing: importController.cancelIndexing()
+        case .culling: cullingController.cancel(galleryId: gallery.id)
+        case .export: exportController.cancel()
+        case .exportFinished: exportController.dismissSummary()
+        case .duplicates: duplicatesController.cancelScan()
+        }
+    }
+
     /// « 52 photos · triée par l'IA · ~/Downloads/photos » under the gallery name.
     private var subtitle: Text {
         let summary = GallerySummary(photos.map(\.summaryItem))
@@ -194,16 +288,23 @@ struct GalleryDetailView: View {
             + Text(verbatim: " · " + abbreviatedPath(gallery.folderPath, home: realHomeDirectory()))
     }
 
-    /// The viewer when it is open, otherwise the grid or the table.
+    /// The viewer when it is open, otherwise the grid or the table (or a word when the filter is empty).
     // `@ViewBuilder` lets a property return different views from an `if` / `switch`, like a JSX ternary.
     @ViewBuilder private var content: some View {
         let rows = rows
         if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
             PhotoViewer(rows: rows, index: index, loader: loader, browser: browser, sorter: sorter, availability: availability)
+        } else if rows.isEmpty, !photos.isEmpty, browser.filter != .all {
+            EmptyFilterView(filter: browser.filter) { selectFilter(.all) }
         } else {
             switch layout {
             case .grid:
-                GalleryGridView(rows: rows, loader: loader, browser: browser, sorter: sorter, canUseOriginals: availability.canUseOriginals)
+                GalleryGridView(
+                    rows: rows, loader: loader, browser: browser, sorter: sorter,
+                    canUseOriginals: availability.canUseOriginals,
+                    cellAspectRatio: ThumbnailShape.cellAspectRatio(sizes: photos.map { ($0.pixelWidth, $0.pixelHeight) }),
+                    minimumCellWidth: thumbnailWidth
+                )
             case .table:
                 GalleryTableView(rows: rows, browser: browser, sorter: sorter)
             }
@@ -268,33 +369,72 @@ private struct ThumbnailTaskKey: Hashable {
     var canUseOriginals: Bool
 }
 
-/// Above the photos when the originals are out of reach (F9): « Disque « Photos 2TB » non connecté ».
+/// Above the photos when the originals are out of reach (F9): « Disque « Photos 2TB » non connecté »,
+/// on a glass banner like the other floating elements. Same message and advice as before.
 struct UnavailableGalleryBar: View {
     let availability: GalleryAvailability
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: availability.systemImage)
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(availability.message ?? "")
-                        .font(.headline)
-                    if let advice = availability.advice {
-                        Text(advice)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: availability.systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Palette.review.color)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(availability.message ?? "")
+                    .fontWeight(.semibold)
+                if let advice = availability.advice {
+                    Text(advice)
+                        .foregroundStyle(.secondary)
+                        // Not `.fixedSize`: a text that may grow without limit made SwiftUI ask for a
+                        // huge window (see `SidebarLayoutTests`).
+                        .lineLimit(3)
                 }
-                Spacer(minLength: 0)
             }
-            .font(.callout)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-            Divider()
+            Spacer(minLength: 0)
         }
-        .background(Color.orange.opacity(0.12))
+        .font(.callout)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassBackground(in: RoundedRectangle(cornerRadius: Radius.card))
+        .padding(.horizontal, GridLayout.padding)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Under a verdict filter that matches no photo: says so, and offers to show every photo.
+private struct EmptyFilterView: View {
+    let filter: VerdictFilter
+    let showAll: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Aucune photo « \(filter.title) »", systemImage: filter.verdict?.symbolName ?? "photo")
+        } description: {
+            Text("Les photos que vous triez restent visibles jusqu'au prochain changement de filtre.")
+        } actions: {
+            Button("Afficher toutes les photos (⌘1)", action: showAll)
+        }
+    }
+}
+
+/// Where the verdict filter of each gallery is remembered between launches: in the user defaults,
+/// one key per gallery (like a `localStorage` entry per page).
+struct VerdictFilterStore {
+    var defaults: UserDefaults = .standard
+
+    func filter(galleryId: UUID) -> VerdictFilter {
+        defaults.string(forKey: VerdictFilter.storageKey(galleryId: galleryId)).flatMap(VerdictFilter.init(rawValue:)) ?? .all
+    }
+
+    func setFilter(_ filter: VerdictFilter, galleryId: UUID) {
+        let key = VerdictFilter.storageKey(galleryId: galleryId)
+        // « Toutes » is the default: nothing to keep.
+        if filter == .all {
+            defaults.removeObject(forKey: key)
+        } else {
+            defaults.set(filter.rawValue, forKey: key)
+        }
     }
 }
 
@@ -305,75 +445,5 @@ extension GalleryAvailability {
         case .diskDisconnected: "externaldrive.badge.xmark"
         case .folderMissing: "questionmark.folder"
         }
-    }
-}
-
-/// Above the photos: progress and "Annuler" while sorting, otherwise the number of photos per verdict.
-private struct CullingStatusBar: View {
-    let gallery: Gallery
-    let photos: [Photo]
-    @Environment(CullingController.self) private var cullingController
-
-    var body: some View {
-        if let progress = cullingController.progress, progress.galleryId == gallery.id {
-            bar {
-                ProgressView(value: progress.fraction)
-                    .frame(maxWidth: 240)
-                Text("Tri des photos : \(progress.completed) sur \(progress.total)")
-                    .monospacedDigit()
-                Spacer()
-                Button("Annuler") { cullingController.cancel(galleryId: gallery.id) }
-            }
-        } else if cullingController.isQueued(galleryId: gallery.id) {
-            bar {
-                ProgressView().controlSize(.small)
-                Text("Tri en attente…")
-                Spacer()
-                Button("Annuler") { cullingController.cancel(galleryId: gallery.id) }
-            }
-        } else if gallery.culledAt != nil {
-            let counts = VerdictCounts(photos)
-            bar {
-                count(of: .keep, in: counts)
-                count(of: .review, in: counts)
-                count(of: .reject, in: counts)
-                if counts.chosenByUser > 0 {
-                    Label("Vos choix : \(counts.chosenByUser)", systemImage: "person.fill")
-                        .monospacedDigit()
-                        .help("Photos triées à la main. Un nouveau tri par l'IA ne les change pas.")
-                }
-                let burstCount = Set(photos.compactMap(\.burstNumber)).count
-                if burstCount > 0 {
-                    Label("Rafales : \(burstCount)", systemImage: "square.stack")
-                        .monospacedDigit()
-                        .help("Chaque rafale est montrée par sa meilleure photo. Touche S : voir toute la rafale ou la replier.")
-                }
-                Spacer()
-                Text("P Garder · U À revoir · X Rejeter · A IA. Rien n'est supprimé.")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .help("Touches pour trier la photo sélectionnée à la main : P Garder, U À revoir, X Rejeter, A revenir à la proposition de l'IA. ⌘Z annule. « Rejeter » ne supprime aucun fichier.")
-            }
-        }
-    }
-
-    private func count(of verdict: CullingVerdict, in counts: VerdictCounts) -> some View {
-        HStack(spacing: 6) {
-            Circle().fill(verdict.color).frame(width: 8, height: 8)
-            Text(verbatim: "\(verdict.label) : \(counts.count(of: verdict))")
-                .monospacedDigit()
-        }
-    }
-
-    // `@ViewBuilder` lets a function take several views as content, like `children` in React.
-    private func bar(@ViewBuilder content: () -> some View) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12, content: content)
-                .font(.callout)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            Divider()
-        }
-        .background(.bar)
     }
 }

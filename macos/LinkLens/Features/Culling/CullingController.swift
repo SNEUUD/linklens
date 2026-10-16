@@ -8,6 +8,8 @@ final class CullingController {
     var errorMessage: String?
     private(set) var progress: CullingProgress?
     private(set) var runningGalleryId: UUID?
+    /// When the running sorting started, for the progress pill (the most recent work is shown).
+    private(set) var startedAt: Date?
     private var queue: [Request] = []
 
     @ObservationIgnored private let store: LibraryStore
@@ -67,6 +69,7 @@ final class CullingController {
         guard task == nil, !queue.isEmpty else { return }
         let request = queue.removeFirst()
         runningGalleryId = request.galleryId
+        startedAt = .now
         task = Task {
             do {
                 _ = try await culler.cullGallery(id: request.galleryId) { [weak self] progress in
@@ -81,6 +84,7 @@ final class CullingController {
             }
             progress = nil
             runningGalleryId = nil
+            startedAt = nil
             task = nil
             startNextIfIdle()
         }

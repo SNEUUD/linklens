@@ -40,16 +40,21 @@ struct HexColor: Equatable, Sendable {
 struct AdaptiveColor: Sendable {
     let light: HexColor
     let dark: HexColor
+    /// 1 for an opaque colour; below 1, the colour lets what is behind show through (like `rgba(…)`).
+    let lightOpacity: Double
+    let darkOpacity: Double
 
-    init(light: UInt32, dark: UInt32) {
+    init(light: UInt32, dark: UInt32, lightOpacity: Double = 1, darkOpacity: Double = 1) {
         self.light = HexColor(hex: light)
         self.dark = HexColor(hex: dark)
+        self.lightOpacity = lightOpacity
+        self.darkOpacity = darkOpacity
     }
 
     /// An AppKit colour that resolves to `light` or `dark` while drawing.
     var nsColor: NSColor {
-        let light = light.nsColor
-        let dark = dark.nsColor
+        let light = light.nsColor.withAlphaComponent(lightOpacity)
+        let dark = dark.nsColor.withAlphaComponent(darkOpacity)
         return NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
         }
@@ -72,6 +77,17 @@ enum Palette {
     /// Star of the best photo of a burst: an icon, so 3:1 is enough.
     static let gold = AdaptiveColor(light: 0x8F5D00, dark: 0xFFCC4D)
 
+    /// Selected segment of a capsule (the filters): a raised chip, as in the mockup.
+    static let chip = AdaptiveColor(light: 0xFFFFFF, dark: 0x45454C)
+    /// Behind the badges drawn over a photo (verdict, star, burst count). Nearly opaque, like the
+    /// mockup's: a real blur on every badge of a grid of hundreds of photos would slow the scrolling.
+    static let badge = AdaptiveColor(light: 0xFFFFFF, dark: 0x1E1E22, lightOpacity: 0.88, darkOpacity: 0.82)
+    /// The two prints peeking out behind a collapsed burst: front one, then back one.
+    static let stackFront = AdaptiveColor(light: 0xCFD0D6, dark: 0x3A3A40)
+    static let stackBack = AdaptiveColor(light: 0xDCDDE2, dark: 0x2C2C31)
+    /// Bands around a photo shown whole in a cell of another shape.
+    static let photoBackground = AdaptiveColor(light: 0xDCDCE2, dark: 0x0C0C0E)
+
     /// The lightest and darkest backgrounds text is drawn on (window, sidebar, selected chip),
     /// in each mode. The contrast test checks every text colour against all of them.
     static let lightSurfaces = [0xFFFFFF, 0xF8F8FA, 0xECECF0, 0xE3E3E8].map(HexColor.init(hex:))
@@ -80,7 +96,6 @@ enum Palette {
 
 extension CullingVerdict {
     /// Verdict colour of the new interface, readable as text in light and dark mode.
-    /// (`color`, in VerdictViews.swift, is the older one still used by the grid until batch 2.)
     var tint: Color {
         switch self {
         case .keep: Palette.keep.color

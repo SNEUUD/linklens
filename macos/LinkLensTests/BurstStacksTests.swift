@@ -222,7 +222,7 @@ struct BurstCoverChoiceTests {
         #expect(!ai.showsStar(isBestOfBurst: false), "the first photo only stands in when nobody chose")
         #expect(user.showsStar(isBestOfBurst: false))
         #expect(!other.showsStar(isBestOfBurst: true), "the AI's best loses its star to the user's choice")
-        #expect(user.starDescription == "Meilleure photo de la rafale, votre choix")
-        #expect(ai.starDescription == "Meilleure photo de la rafale")
+        #expect(user.starDescription == "Meilleure de la rafale, votre choix")
+        #expect(ai.starDescription == "Meilleure de la rafale")
     }
 }

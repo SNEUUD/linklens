@@ -15,6 +15,11 @@ final class GalleryBrowser {
     private(set) var photos: [BurstStacks.Input] = []
     /// Bursts the user opened (F4). Collapsed by default.
     private(set) var expandedBursts: Set<Int> = []
+    /// « Toutes », « Garder », « À revoir » or « Rejeter » (see `VerdictFilter` for the rules).
+    private(set) var filter = VerdictFilter.all
+    /// Photos shown under the current filter, kept on screen after the user sorted them out of it.
+    /// Emptied when the filter changes or is chosen again.
+    private var retainedIds: Set<UUID> = []
     /// What is shown, in order: single photos, collapsed bursts and photos of open bursts.
     private(set) var entries: [GalleryEntry] = []
     /// Ids of the shown photos (`entries`), in display order.
@@ -39,6 +44,25 @@ final class GalleryBrowser {
         rebuildEntries()
     }
 
+    /// Shows another filter, or the same one again: either way the photos sorted out of it go away.
+    /// A selected photo that is not shown any more gives way to the nearest photo shown after it.
+    func setFilter(_ filter: VerdictFilter) {
+        let previousSelection = selection
+        self.filter = filter
+        retainedIds = []
+        rebuildEntries(keepingShownPhotos: false)
+        if let previousSelection, selectedIndex == nil {
+            selection = nearestShownPhoto(to: previousSelection)
+        }
+    }
+
+    /// After a new sorting by the AI: bursts collapsed and the filter applied afresh.
+    func gallerySortedAgain() {
+        expandedBursts = []
+        retainedIds = []
+        rebuildEntries(keepingShownPhotos: false)
+    }
+
     /// Opens a collapsed burst or closes an open one.
     func toggleBurst(_ number: Int) {
         if expandedBursts.contains(number) {
@@ -50,10 +74,17 @@ final class GalleryBrowser {
     }
 
     /// S key: opens or closes the burst of the selected photo. Returns false when it is not in a burst.
+    /// Under a verdict filter the bursts are already unfolded: S shows the whole burst under « Toutes »,
+    /// open, with the same photo still selected.
     @discardableResult
     func toggleSelectedBurst() -> Bool {
         guard let number = selectedEntry?.burst?.number else { return false }
-        toggleBurst(number)
+        if filter != .all {
+            expandedBursts.insert(number)
+            setFilter(.all)
+        } else {
+            toggleBurst(number)
+        }
         return true
     }
 
@@ -68,7 +99,7 @@ final class GalleryBrowser {
     func reveal(_ photoId: UUID) {
         if photoIds.contains(photoId) {
             selection = photoId
-        } else if let number = photos.first(where: { $0.id == photoId })?.burstNumber,
+        } else if filter == .all, let number = photos.first(where: { $0.id == photoId })?.burstNumber,
                   let stack = entries.first(where: { $0.burst?.number == number }) {
             selection = stack.photoId
         }
@@ -101,14 +132,25 @@ final class GalleryBrowser {
         isViewerOpen = false
     }
 
-    private func rebuildEntries() {
-        entries = BurstStacks.entries(for: photos, expanded: expandedBursts)
+    /// - Parameter keepingShownPhotos: true when only the photos changed (a verdict, a burst): what is
+    ///   on screen under a verdict filter stays there. False when the filter itself changes.
+    private func rebuildEntries(keepingShownPhotos: Bool = true) {
+        if keepingShownPhotos, filter != .all {
+            retainedIds.formUnion(photoIds)
+        }
+        entries = BurstStacks.entries(for: photos, expanded: expandedBursts, filter: filter, retaining: retainedIds)
         photoIds = entries.map(\.photoId)
         // A selected photo hidden in a collapsed burst: the burst's stack is selected instead.
-        if let selection, selectedIndex == nil,
+        if filter == .all, let selection, selectedIndex == nil,
            let number = photos.first(where: { $0.id == selection })?.burstNumber,
            let stack = entries.first(where: { $0.burst?.number == number }) {
             self.selection = stack.photoId
         }
+    }
+
+    /// The first shown photo at or after this one in the gallery's order, else the last shown photo.
+    private func nearestShownPhoto(to photoId: UUID) -> UUID? {
+        guard let position = photos.firstIndex(where: { $0.id == photoId }) else { return nil }
+        return (entries.first { $0.photoIndex >= position } ?? entries.last)?.photoId
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 /// Arrows move the selection; space, Return or a double-click open the viewer.
 /// A burst is a stack showing its best photo: S or its badge open and close it, B chooses its best photo (F4).
 /// P / U / X sort the selected photo by hand and go to the next one; A goes back to the AI's proposal.
+/// Under a verdict filter, the bursts are unfolded and S shows the whole burst under « Toutes ».
 struct GalleryGridView: View {
     let rows: [DisplayedPhoto]
     let loader: ThumbnailLoader
@@ -11,13 +12,17 @@ struct GalleryGridView: View {
     let sorter: ManualSorter
     /// False while the disk is unplugged (F9); when it turns true, cells without a thumbnail ask again.
     var canUseOriginals = true
+    /// Width / height of every cell: the dominant orientation of the gallery (`ThumbnailShape`).
+    var cellAspectRatio = ThumbnailShape.defaultAspectRatio
+    /// Smallest width of a cell, from the size slider and ⌘+ / ⌘−.
+    var minimumCellWidth = ThumbnailSize.standard
     // `@FocusState` tracks whether this view has the keyboard focus (like `document.activeElement`).
     @FocusState private var isFocused: Bool
 
     var body: some View {
         // `GeometryReader` gives the available size, needed to know how many photos fit on a row.
         GeometryReader { geometry in
-            let columnCount = GridLayout.columnCount(forWidth: geometry.size.width)
+            let columnCount = GridLayout.columnCount(forWidth: geometry.size.width, minimumCellWidth: minimumCellWidth)
             // `ScrollViewReader` gives a `proxy` able to scroll to a view by its id (like `element.scrollIntoView()`).
             ScrollViewReader { proxy in
                 ScrollView {
@@ -25,16 +30,17 @@ struct GalleryGridView: View {
                     // (react-window): thousands of photos cost no more than the few on screen.
                     LazyVGrid(
                         columns: Array(repeating: GridItem(.flexible(), spacing: GridLayout.spacing), count: columnCount),
-                        spacing: GridLayout.spacing
+                        spacing: GridLayout.rowSpacing
                     ) {
                         ForEach(rows) { row in
                             let photo = row.photo
                             ThumbnailCell(
                                 photo: photo,
-                                burst: row.entry.burst,
+                                entry: row.entry,
                                 loader: loader,
                                 canUseOriginals: canUseOriginals,
                                 isSelected: photo.id == browser.selection,
+                                cellAspectRatio: cellAspectRatio,
                                 onToggleBurst: { number in
                                     browser.selection = photo.id
                                     browser.toggleBurst(number)
@@ -100,14 +106,17 @@ struct GalleryGridView: View {
     }
 }
 
-/// One photo of the grid: thumbnail, verdict, star of the burst, file name, reasons on hover.
-/// A collapsed burst is drawn as a stack with its photo count; an open burst gets a tinted background.
+/// One photo of the grid, as in the mockup: rounded thumbnail, verdict badge (top left), star of the
+/// burst's best photo (top right), burst count (bottom right), « DSC04311 · rafale de 7 » below.
+/// A collapsed burst gets two prints peeking out behind it; the selection gets an accent ring.
 private struct ThumbnailCell: View {
     let photo: Photo
-    let burst: BurstPlacement?
+    let entry: GalleryEntry
     let loader: ThumbnailLoader
     let canUseOriginals: Bool
     let isSelected: Bool
+    /// Width / height of the cell, the same for the whole gallery (`ThumbnailShape`).
+    let cellAspectRatio: CGFloat
     /// Opens or closes the burst of this photo (receives its number).
     let onToggleBurst: (Int) -> Void
     /// Sorts this photo by hand (context menu, VoiceOver actions).
@@ -117,77 +126,34 @@ private struct ThumbnailCell: View {
     // Local state of the cell, like `useState`: the image once loaded.
     @State private var loadedImage: CGImage?
 
+    private var burst: BurstPlacement? { entry.burst }
+
     var body: some View {
         let image = loadedImage ?? loader.cachedThumbnail(for: photo.id)
         let messages = photo.cullingReasons.map { $0.message() }
 
-        VStack(spacing: 4) {
-            ZStack {
-                Rectangle().fill(.quaternary)
-                if let image {
-                    // `decorative`: VoiceOver reads the cell's label below instead of the image.
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    Image(systemName: photo.mediaKind == .video ? "video" : "photo")
-                        .font(.title2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            // Same 3:2 box for every photo: portraits get side bands, the grid stays aligned.
-            .aspectRatio(3 / 2, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            // Two sheets behind a collapsed burst, drawn in the cell's padding: the grid stays aligned.
-            .background {
-                if let burst, !burst.isExpanded {
-                    StackSheets()
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if let burst {
-                    BurstBadge(burst: burst) { onToggleBurst(burst.number) }
-                        .padding(5)
-                }
-            }
-            .overlay(alignment: .topLeading) {
-                if let burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
-                    BestOfBurstStar(burst: burst).padding(5)
-                }
-            }
-            .overlay(alignment: .bottomLeading) {
-                if photo.mediaKind == .video {
-                    Image(systemName: "video.fill")
-                        .font(.caption)
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 4))
-                        .padding(5)
-                        .accessibilityHidden(true)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if let verdict = photo.verdict {
-                    VerdictMark(verdict: verdict, isChosenByUser: photo.isVerdictChosenByUser).padding(5)
-                }
-            }
-
-            Text(verbatim: photo.relativePath)
-                .font(.caption)
+        VStack(spacing: 7) {
+            thumbnail(image)
+                .opacity(entry.isOutsideFilter ? 0.45 : 1)
+            Text(verbatim: caption)
+                .font(.system(size: 11.5))
+                .monospacedDigit()
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(isSelected ? .primary : .secondary)
+                .frame(maxWidth: .infinity)
         }
-        .padding(5)
-        .background(cellBackground, in: RoundedRectangle(cornerRadius: 7))
-        .overlay {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 7).strokeBorder(Color.accentColor, lineWidth: 2)
+        // The photos of an open burst share a light band, so the burst reads as one block.
+        .background {
+            if let burst, burst.isExpanded, !burst.isShownAlone {
+                RoundedRectangle(cornerRadius: Radius.card + 2)
+                    .fill(Color.primary.opacity(0.06))
+                    .padding(-6)
             }
         }
         .contentShape(Rectangle())
         // Tooltip on hover: the verdict (and who chose it) and every reason of the AI.
-        .help(([photo.verdictDescription].compactMap { $0 } + messages).joined(separator: "\n"))
+        .help(([photo.verdictDescription, outsideFilterNote].compactMap { $0 } + messages).joined(separator: "\n"))
         .contextMenu {
             SortingButtons(showsKeys: true, action: onSort)
             if let burst {
@@ -196,15 +162,15 @@ private struct ThumbnailCell: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: ([photo.relativePath, photo.mediaKind == .video ? String(localized: "Vidéo") : nil, photo.verdictDescription, burst?.accessibilityDescription, messages.first]
-                .compactMap { $0 })
-                .joined(separator: ", ")))
+        .accessibilityLabel(Text(verbatim: accessibilityLabel(firstReason: messages.first)))
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
-        // VoiceOver lists this action on the cell (actions menu), since the badge is hidden inside it.
+        // VoiceOver lists these actions on the cell (actions menu), since the badges are hidden inside it.
         .accessibilityActions {
             SortingButtons(action: onSort)
             if let burst {
-                Button(burst.isExpanded ? "Replier la rafale" : "Voir toute la rafale") { onToggleBurst(burst.number) }
+                if !burst.isShownAlone {
+                    Button(burst.isExpanded ? "Replier la rafale" : "Voir toute la rafale") { onToggleBurst(burst.number) }
+                }
                 BurstCoverButtons(burst: burst, action: onBurstCover)
             }
         }
@@ -219,6 +185,106 @@ private struct ThumbnailCell: View {
             }
         }
     }
+
+    /// The photo in its cell with the badges over it.
+    private func thumbnail(_ image: CGImage?) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.thumbnail)
+        // An empty box of the cell's shape; the photo is laid over it, so it can fill the box and be
+        // cropped by `clipShape` (CSS `object-fit: cover`) or be shown whole (`contain`).
+        return Color.clear
+            .aspectRatio(cellAspectRatio, contentMode: .fit)
+            .overlay { photoContent(image) }
+            .clipShape(shape)
+            .shadow(color: .black.opacity(isSelected ? 0.18 : 0.12), radius: isSelected ? 9 : 4, y: isSelected ? 6 : 2)
+            .background(alignment: .top) {
+                if let burst, !burst.isExpanded {
+                    StackSheets()
+                }
+            }
+            .overlay {
+                if isSelected {
+                    // Drawn outside the photo (CSS `box-shadow: 0 0 0 3px`), so nothing of it is covered.
+                    RoundedRectangle(cornerRadius: Radius.thumbnail + 3)
+                        .strokeBorder(Color.accentColor, lineWidth: 3)
+                        .padding(-3)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if let verdict = photo.verdict {
+                    VerdictDisc(verdict: verdict, isChosenByUser: photo.isVerdictChosenByUser).padding(7)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
+                    BestOfBurstStar(burst: burst).padding(7)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let burst, !burst.isShownAlone {
+                    BurstBadge(burst: burst) { onToggleBurst(burst.number) }
+                        .padding(7)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if photo.mediaKind == .video {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .photoBadge()
+                        .padding(7)
+                        .accessibilityHidden(true)
+                }
+            }
+    }
+
+    @ViewBuilder private func photoContent(_ image: CGImage?) -> some View {
+        if let image {
+            let photoRatio = CGFloat(image.width) / CGFloat(max(image.height, 1))
+            let fills = ThumbnailShape.fillsCell(photoAspectRatio: photoRatio, cellAspectRatio: cellAspectRatio)
+            ZStack {
+                Palette.photoBackground.color
+                // `decorative`: VoiceOver reads the cell's label instead of the image.
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: fills ? .fill : .fit)
+            }
+        } else {
+            ZStack {
+                Rectangle().fill(.quaternary)
+                Image(systemName: photo.mediaKind == .video ? "video" : "photo")
+                    .font(.title2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// « DSC04311 · rafale de 7 »: the file name without its extension, as in the mockup.
+    private var caption: String {
+        let name = (photo.fileName as NSString).deletingPathExtension
+        guard let burst else { return name }
+        return String(localized: "\(name) · rafale de \(burst.count)")
+    }
+
+    /// Under a verdict filter, for a photo the user just sorted out of it.
+    private var outsideFilterNote: String? {
+        entry.isOutsideFilter
+            ? String(localized: "Ne correspond plus au filtre : elle reste ici jusqu'au prochain changement de filtre.")
+            : nil
+    }
+
+    /// « DSC04311.ARW, Garder, votre choix, Meilleure de la rafale, Rafale de 7 photos, repliée, <raison> ».
+    private func accessibilityLabel(firstReason: String?) -> String {
+        let star = burst.flatMap { $0.showsStar(isBestOfBurst: photo.isBestOfBurst) ? $0.starDescription : nil }
+        let parts: [String?] = [
+            photo.fileName,
+            photo.mediaKind == .video ? String(localized: "Vidéo") : nil,
+            photo.verdictDescription,
+            star,
+            burst?.accessibilityDescription,
+            entry.isOutsideFilter ? String(localized: "ne correspond plus au filtre") : nil,
+            firstReason,
+        ]
+        return parts.compactMap { $0 }.joined(separator: ", ")
+    }
 }
 
 private struct CellTaskKey: Hashable {
@@ -226,56 +292,47 @@ private struct CellTaskKey: Hashable {
     var canUseOriginals: Bool
 }
 
-extension ThumbnailCell {
-    /// Selected: accent colour. Photo of an open burst: a neutral tint, so the burst reads as one block.
-    private var cellBackground: Color {
-        if isSelected { return Color.accentColor.opacity(0.25) }
-        if burst?.isExpanded == true { return Color.secondary.opacity(0.14) }
-        return .clear
-    }
-}
-
-/// Two sheets peeking out behind the thumbnail of a collapsed burst, like a pile of prints.
+/// Two prints peeking out above the thumbnail of a collapsed burst, like a pile of photos.
 private struct StackSheets: View {
     var body: some View {
-        ZStack {
-            sheet.offset(x: 5, y: -5).opacity(0.5)
-            sheet.offset(x: 2.5, y: -2.5)
+        ZStack(alignment: .top) {
+            sheet(Palette.stackBack.color)
+                .padding(.horizontal, 12)
+                .offset(y: -8)
+            sheet(Palette.stackFront.color)
+                .padding(.horizontal, 6)
+                .offset(y: -4)
         }
+        .accessibilityHidden(true)
     }
 
-    private var sheet: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .fill(Color(nsColor: .controlBackgroundColor))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.secondary.opacity(0.6), lineWidth: 1))
+    private func sheet(_ color: Color) -> some View {
+        RoundedRectangle(cornerRadius: Radius.thumbnail)
+            .fill(color)
+            .overlay(RoundedRectangle(cornerRadius: Radius.thumbnail).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .frame(height: 40)
     }
 }
 
-/// Badge of a burst, in the bottom corner of its thumbnails. A click opens or closes the burst.
-/// Collapsed: stack symbol and photo count. Open: the burst number, in the accent colour.
+/// Count pill of a burst, in the bottom corner of its thumbnails. A click opens or closes the burst.
+/// Collapsed: stack symbol and photo count. Open: a chevron and the count, in the accent colour.
 private struct BurstBadge: View {
     let burst: BurstPlacement
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if burst.isExpanded {
-                    Label("Rafale \(burst.number)", systemImage: "chevron.up")
-                } else {
-                    Label {
-                        Text(verbatim: "\(burst.count)")
-                    } icon: {
-                        Image(systemName: "square.stack.fill")
-                    }
-                }
+            HStack(spacing: 4) {
+                Image(systemName: burst.isExpanded ? "chevron.up" : "square.on.square")
+                Text(verbatim: "\(burst.count)")
             }
             .font(.system(size: 11, weight: .semibold))
             .monospacedDigit()
-            .foregroundStyle(.white)
-            .padding(.horizontal, 6)
-            .frame(height: 20)
-            .background(burst.isExpanded ? Color.accentColor : .black.opacity(0.6), in: Capsule())
+            .foregroundStyle(burst.isExpanded ? Color.accentColor : Color.primary)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(Palette.badge.color, in: Capsule())
+            .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
         }
         .buttonStyle(.plain)
         .help(burst.isExpanded
@@ -285,20 +342,12 @@ private struct BurstBadge: View {
     }
 }
 
-extension BurstPlacement {
-    /// Read by VoiceOver with the photo's name and verdict.
-    var accessibilityDescription: String {
-        isExpanded
-            ? String(localized: "Rafale \(number), \(count) photos")
-            : String(localized: "Rafale de \(count) photos, repliée")
-    }
-}
-
 /// Grid geometry and keyboard moves, kept apart from the view so they can be tested.
 enum GridLayout {
-    static let minimumCellWidth: CGFloat = 180
-    static let spacing: CGFloat = 8
-    static let padding: CGFloat = 12
+    /// Between two photos of a row, and between two rows (room for the caption and the burst prints).
+    static let spacing: CGFloat = 18
+    static let rowSpacing: CGFloat = 22
+    static let padding: CGFloat = 16
 
     enum Direction {
         case left, right, up, down
@@ -315,7 +364,7 @@ enum GridLayout {
     }
 
     /// As many cells of at least `minimumCellWidth` as fit in the width, at least one.
-    static func columnCount(forWidth width: CGFloat) -> Int {
+    static func columnCount(forWidth width: CGFloat, minimumCellWidth: CGFloat = ThumbnailSize.standard) -> Int {
         let available = width - 2 * padding + spacing
         return max(1, Int(available / (minimumCellWidth + spacing)))
     }

@@ -73,6 +73,10 @@ struct LinkLensApp: App {
                     .environment(importController)
                     .environment(cardImportController)
             }
+            // Filters and thumbnail size, at the top of the system's « Présentation » menu.
+            CommandGroup(before: .toolbar) {
+                PresentationMenuCommands()
+            }
             // `CommandMenu` adds a menu of its own to the menu bar, after « Présentation ».
             CommandMenu("Galerie") {
                 GalleryMenuCommands()

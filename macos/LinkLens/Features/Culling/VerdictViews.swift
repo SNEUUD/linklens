@@ -1,6 +1,7 @@
 import SwiftUI
 
 extension CullingVerdict {
+    /// The older colours, still used by the viewer's buttons until batch 4. Elsewhere: `tint`.
     var color: Color {
         switch self {
         case .keep: .green
@@ -34,7 +35,7 @@ struct VerdictBadge: View {
                     Text(verdict.label)
                 } icon: {
                     Circle()
-                        .fill(verdict.color)
+                        .fill(verdict.tint)
                         .frame(width: 8, height: 8)
                 }
                 if isChosenByUser {
@@ -53,27 +54,47 @@ struct VerdictBadge: View {
     }
 }
 
-/// Compact verdict drawn over a thumbnail: a coloured disc with a symbol for the AI's proposal,
-/// a wider capsule with a person symbol for the user's own choice.
-struct VerdictMark: View {
+/// Verdict drawn over a thumbnail, as in the mockup: the symbol in its colour on a small round badge,
+/// so it reads by its shape as well as its colour. A verdict chosen by the user gets a ring.
+struct VerdictDisc: View {
     let verdict: CullingVerdict
     var isChosenByUser = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: verdict.symbolName)
-            if isChosenByUser {
-                Image(systemName: "person.fill")
-                    .font(.system(size: 9, weight: .bold))
+        Image(systemName: verdict.symbolName)
+            .font(.system(size: verdict == .reject ? 11 : 12, weight: .heavy))
+            .foregroundStyle(verdict.tint)
+            .photoBadge(ringColor: isChosenByUser ? verdict.tint : nil)
+            .help(isChosenByUser ? "\(verdict.label), votre choix" : verdict.label)
+    }
+}
+
+/// Star of the best photo of a burst, on the same round badge. Ringed when the user chose it (B).
+struct BestOfBurstStar: View {
+    let burst: BurstPlacement
+
+    var body: some View {
+        Image(systemName: "star.fill")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Palette.gold.color)
+            .photoBadge(ringColor: burst.isCoverChosenByUser ? Palette.gold.color : nil)
+            .help(burst.starDescription)
+            .accessibilityLabel(Text(verbatim: burst.starDescription))
+    }
+}
+
+extension View {
+    /// The 24-point round badge of the thumbnails: nearly opaque background, soft shadow, and an
+    /// optional ring (the user's own choice).
+    func photoBadge(ringColor: Color? = nil) -> some View {
+        frame(width: 24, height: 24)
+            .background(Palette.badge.color, in: Circle())
+            .overlay {
+                if let ringColor {
+                    Circle().strokeBorder(ringColor, lineWidth: 1.5)
+                }
             }
-        }
-        .font(.system(size: 10, weight: .bold))
-        .foregroundStyle(.white)
-        .frame(minWidth: 20, minHeight: 20)
-        .padding(.horizontal, isChosenByUser ? 5 : 0)
-        .background(verdict.color, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.8), lineWidth: isChosenByUser ? 1.5 : 1))
-        .shadow(color: .black.opacity(0.4), radius: 2)
+            .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
     }
 }
 
@@ -110,25 +131,5 @@ struct BurstCoverButtons: View {
         if burst.isCoverChosenByUser {
             Button("Revenir à la meilleure selon l'IA") { action(.followAI) }
         }
-    }
-}
-
-/// Star of the best photo of a burst, readable over any photo. Outlined in white when the user
-/// chose it, like the verdict marks.
-struct BestOfBurstStar: View {
-    let burst: BurstPlacement
-
-    var body: some View {
-        Image(systemName: "star.fill")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.yellow)
-            .frame(width: 20, height: 20)
-            .background(.black.opacity(0.55), in: Circle())
-            .overlay {
-                if burst.isCoverChosenByUser {
-                    Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1.5)
-                }
-            }
-            .accessibilityLabel(Text(verbatim: burst.starDescription))
     }
 }

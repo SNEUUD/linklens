@@ -11,6 +11,8 @@ final class ImportController {
     var selectedGalleryId: UUID?
     var errorMessage: String?
     private(set) var progress: IndexingProgress?
+    /// When the running indexing started, for the progress pill.
+    private(set) var startedAt: Date?
     private var indexingTask: Task<Void, Never>?
 
     @ObservationIgnored private let store: LibraryStore
@@ -49,6 +51,7 @@ final class ImportController {
 
     private func indexFolder(at folder: URL) {
         // A `Task` starts async work from synchronous code (like calling an async function without awaiting it).
+        startedAt = .now
         indexingTask = Task {
             await cleanupTask?.value
             do {
