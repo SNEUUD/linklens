@@ -29,9 +29,10 @@ struct LinkLensApp: App {
         }
         _importController = State(initialValue: folderImport)
         // `_name = State(initialValue:)` sets a `@State` property from `init`, before the view exists.
-        _cardImportController = State(initialValue: CardImportController(importer: CardImporter(store: store)) { galleryId in
+        _cardImportController = State(initialValue: CardImportController(importer: CardImporter(store: store)) { galleryId, sortNow in
             folderImport.selectedGalleryId = galleryId
-            culling.cull(galleryId: galleryId)
+            // Not sorted now: it will be at the next launch, or with « Trier » in the toolbar.
+            if sortNow { culling.cull(galleryId: galleryId) }
         })
         // F9: which galleries have their disk plugged in. When a disk comes back, the galleries that
         // could not be sorted while it was away are sorted now (only those never sorted).

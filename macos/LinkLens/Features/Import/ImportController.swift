@@ -45,6 +45,15 @@ final class ImportController {
         indexFolder(at: folder)
     }
 
+    /// A folder dropped on the window (F2, like « Ajouter un dossier… »): the drop gives access to it.
+    func indexDroppedFolder(_ folder: URL) {
+        guard !isIndexing else {
+            errorMessage = String(localized: "Un dossier est déjà en cours d'indexation. Glissez le suivant quand la barre de progression a disparu.")
+            return
+        }
+        indexFolder(at: folder)
+    }
+
     func cancelIndexing() {
         indexingTask?.cancel()
     }

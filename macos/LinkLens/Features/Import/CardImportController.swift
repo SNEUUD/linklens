@@ -27,6 +27,12 @@ final class CardImportController {
     private(set) var defaultDestination: ImportDestination?
     /// Also make the location chosen in the sheet the default one.
     var makeDestinationDefault = false
+    /// « Trier les photos dès la fin de l'import »: on by default, remembered between launches.
+    /// `didSet` runs after each change, like a setter that also writes to `localStorage`.
+    var sortsAfterImport: Bool {
+        didSet { UserDefaults.standard.set(sortsAfterImport, forKey: Self.sortsAfterImportKey) }
+    }
+    static let sortsAfterImportKey = "cardImport.sortsAfterImport"
     private(set) var progress: CardImportProgress?
     /// Shown in the sheet after a cancellation.
     private(set) var notice: String?
@@ -34,7 +40,8 @@ final class CardImportController {
 
     @ObservationIgnored private let importer: CardImporter
     @ObservationIgnored private let destinations: ImportDestinationStore
-    @ObservationIgnored private let onGalleryImported: @MainActor (UUID) -> Void
+    /// Called with the new gallery and whether to sort it now (`sortsAfterImport`).
+    @ObservationIgnored private let onGalleryImported: @MainActor (UUID, _ sortNow: Bool) -> Void
     @ObservationIgnored private var task: Task<Void, Never>?
 
     var isSheetPresented: Bool { stage != .idle }
@@ -47,11 +54,12 @@ final class CardImportController {
     init(
         importer: CardImporter,
         destinations: ImportDestinationStore = ImportDestinationStore(),
-        onGalleryImported: @escaping @MainActor (UUID) -> Void = { _ in }
+        onGalleryImported: @escaping @MainActor (UUID, _ sortNow: Bool) -> Void = { _, _ in }
     ) {
         self.importer = importer
         self.destinations = destinations
         self.onGalleryImported = onGalleryImported
+        sortsAfterImport = UserDefaults.standard.object(forKey: Self.sortsAfterImportKey) as? Bool ?? true
     }
 
     // MARK: - Choosing the card
@@ -65,6 +73,12 @@ final class CardImportController {
     /// « Importer une carte… » from the menu: the picker opens on the list of disks.
     func chooseCard() {
         askForCard(directory: URL(filePath: "/Volumes", directoryHint: .isDirectory), name: nil)
+    }
+
+    /// A card dropped on the window: the drop already gives access to it, no picker needed.
+    func importDroppedCard(_ card: URL) {
+        guard !isBusy, !isSheetPresented else { return }
+        scan(card)
     }
 
     @discardableResult
@@ -139,10 +153,9 @@ final class CardImportController {
         }
     }
 
-    /// "2026 › 2026-10-14 Mariage Julie & Tom": where the files will go, inside the location.
+    /// "2026 / 2026-10-14 Mariage Julie & Tom /": where the files will go, inside the location.
     var plannedFolder: String {
-        let names = ImportLayout.folderNames(date: sessionDate, sessionName: sessionName)
-        return "\(names.year) › \(names.session)"
+        ImportPathPreview.text(date: sessionDate, sessionName: sessionName)
     }
 
     // MARK: - Import
@@ -163,7 +176,7 @@ final class CardImportController {
                 }
                 stage = .finished(report)
                 if let galleryId = report.galleryId {
-                    onGalleryImported(galleryId)
+                    onGalleryImported(galleryId, sortsAfterImport)
                 }
             } catch is CancellationError {
                 stage = .ready(card)
@@ -190,6 +203,16 @@ final class CardImportController {
         guard !isImporting else { return }
         stage = .idle
         notice = nil
+    }
+
+    /// The interface renders of the tests show the window in a given state without a real card.
+    func showForRenders(_ stage: Stage, progress: CardImportProgress? = nil, destination: ImportDestination? = nil) {
+        self.stage = stage
+        self.progress = progress
+        if let destination {
+            self.destination = destination
+            defaultDestination = destination
+        }
     }
 
     /// Waits for the running step (used by the tests).
