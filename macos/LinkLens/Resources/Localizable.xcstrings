@@ -1,130 +1,860 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
-    "%lld · %lld photos" : {},
-    "2048 pixels de côté, sRGB, qualité 80 %, sans position GPS" : {},
-    "Affichage" : {},
-    "Afficher dans le Finder" : {},
-    "Afficher les photos en grille ou en tableau" : {},
-    "Ajouter un dossier…" : {},
-    "Analyse impossible : à vérifier vous-même" : {},
-    "Annuler" : {},
-    "Aucun défaut détecté" : {},
-    "Aucune galerie" : {},
-    "Aucune photo JPEG, HEIC ou RAW Sony (.ARW) dans le dossier « %@ »." : {},
-    "Chaque rafale est montrée par sa meilleure photo. Touche S : voir toute la rafale ou la replier." : {},
-    "Choisir le dossier…" : {},
-    "Choisissez le dossier où enregistrer les photos (%lld) en %@. Les originaux ne sont pas modifiés." : {},
-    "Choisissez un dossier de photos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié." : {},
-    "Dimensions" : {},
-    "Dossier inaccessible" : {},
-    "Dossier introuvable : %@" : {},
-    "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés." : {},
-    "Export annulé" : {},
-    "Export en %@ : %lld sur %lld" : {},
-    "Export impossible" : {},
-    "Exporter des photos" : {},
-    "Exporter ici" : {},
-    "Exporter…" : {},
-    "Fermer" : {},
-    "Fichier" : {},
-    "Floue (netteté de l'image %@ < %@)" : {},
-    "Floue (netteté du sujet %@ < %@)" : {},
-    "Format" : {},
-    "Galerie introuvable." : {},
-    "Garder" : {},
-    "Grille" : {},
-    "HEIC" : {},
-    "Hautes lumières brûlées (%@ des pixels)" : {},
-    "Importez une carte SD ou un dossier de photos pour commencer." : {},
-    "Impossible d'enregistrer le fichier « %@ »." : {},
-    "Impossible de convertir l'image « %@ »." : {},
-    "Impossible de lire l'image « %@ »." : {},
-    "Impossible de préparer l'image pour l'analyse." : {},
-    "Inconnu" : {},
-    "Indexation : %lld sur %lld" : {},
-    "Indexation impossible" : {},
-    "Indexer" : {},
-    "Indexer un dossier de photos sans le copier" : {},
-    "JPEG pour l'impression" : {},
-    "JPEG pour le web" : {},
-    "L'export des vidéos n'est pas encore disponible (« %@ »)." : {},
-    "La photo sélectionnée (%@)" : {},
-    "Le dossier « %@ » n'est plus disponible. Choisissez-en un autre." : {},
-    "Les originaux ne sont jamais modifiés." : {},
-    "Les photos à garder (%lld)" : {},
-    "LinkLens n'a pas l'autorisation de lire le dossier « %@ ». Choisissez-le à nouveau." : {},
-    "Légèrement floue (netteté de l'image %@ < %@)" : {},
-    "Légèrement floue (netteté du sujet %@ < %@)" : {},
-    "Meilleure photo de la rafale" : {},
-    "Moins bonne de la rafale (meilleure : %@)" : {},
-    "OK" : {},
-    "Pas encore triée" : {},
-    "Photo %lld sur %lld" : {},
-    "Photo précédente" : {},
-    "Photo suivante" : {},
-    "Photo utilitaire (document, capture d'écran…)" : {},
-    "Photos" : {},
-    "Photos exportées : %lld, dans « %@ »" : {},
-    "Pleine résolution, 8 bits, sRGB, compression sans perte (LZW), 300 ppp" : {},
-    "Pleine résolution, Display P3, qualité 85 %" : {},
-    "Pleine résolution, sRGB, qualité 92 %, 300 ppp" : {},
-    "Pour envoyer par e-mail ou publier en ligne. Fichiers légers." : {},
-    "Pour faire tirer vos photos. Pleine résolution." : {},
-    "Pour les appareils Apple. Pleine résolution, deux fois plus léger qu'un JPEG." : {},
-    "Presque aussi bonne que %@, la meilleure de la rafale" : {},
-    "Prise de vue" : {},
-    "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé." : {},
-    "Proposition de l'IA : rien n'est supprimé." : {},
-    "Rafale" : {},
-    "Rafale %lld" : {},
-    "Rafale %lld · %lld photos (S pour replier)" : {},
-    "Rafale %lld · %lld photos (S pour toutes les voir)" : {},
-    "Rafale %lld, %lld photos" : {},
-    "Rafale de %lld photos : voir toutes les photos (S)" : {},
-    "Rafale de %lld photos, repliée" : {},
-    "Rafales : %lld" : {},
-    "Raison" : {},
-    "Raison inconnue (version plus récente de LinkLens)" : {},
-    "Rejeter" : {},
-    "Replier la rafale" : {},
-    "Replier la rafale %lld" : {},
-    "Replier la rafale (S)" : {},
-    "Retour" : {},
-    "Revenir aux photos (Espace ou Échap)" : {},
-    "Sans aucune perte, pour la retouche. Fichiers très lourds." : {},
-    "Score esthétique faible (%@)" : {},
-    "Sous-exposée (%@ de pixels noirs)" : {},
-    "Sujet collé au bord droit (marge %@)" : {},
-    "Sujet collé au bord du bas (marge %@)" : {},
-    "Sujet collé au bord du haut (marge %@)" : {},
-    "Sujet collé au bord gauche (marge %@)" : {},
-    "Sujet collé à un bord (marge %@)" : {},
-    "Sujet coupé par le bas" : {},
-    "Sujet coupé par le bord droit" : {},
-    "Sujet coupé par le bord gauche" : {},
-    "Sujet coupé par le haut" : {},
-    "Sujet coupé par un bord" : {},
-    "Sélectionnez une galerie" : {},
-    "TIFF" : {},
-    "Tableau" : {},
-    "Taille" : {},
-    "Toutes les photos (%lld)" : {},
-    "Tri" : {},
-    "Tri des photos : %lld sur %lld" : {},
-    "Tri en attente…" : {},
-    "Tri impossible" : {},
-    "Trier les photos" : {},
-    "Trier à nouveau" : {},
-    "Très surexposée (%@ de pixels brûlés)" : {},
-    "Voir toute la rafale" : {},
-    "Voir toute la rafale %lld" : {},
-    "Voir toutes les photos de la rafale (S)" : {},
-    "Yeux fermés (%lld visages)" : {},
-    "Yeux fermés (1 visage)" : {},
-    "^[%lld photo](inflect: true)" : {},
-    "À revoir" : {},
-    "Échecs : %lld" : {}
+    "« %@ » ne contient pas de dossier DCIM : ce n'est pas une carte d'appareil photo. Choisissez la carte elle-même." : {
+
+    },
+    "%@ : meilleure photo de la rafale, votre choix" : {
+
+    },
+    "%@ : meilleure photo selon l'IA" : {
+
+    },
+    "%@ (%@)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "%@ seront libérés quand vous viderez la corbeille. Les copies gardées ne sont pas modifiées, et vous pourrez annuler." : {
+
+    },
+    "%@ sur %@%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ sur %2$@%3$@"
+          }
+        }
+      }
+    },
+    "%@, votre choix" : {
+
+    },
+    "%@, votre choix, l'IA proposait %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, votre choix, l'IA proposait %2$@"
+          }
+        }
+      }
+    },
+    "%lld · %lld photos" : {
+
+    },
+    "^[%lld copie](inflect: true) identique · %@ chacune" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld copie](inflect: true) identique · %2$@ chacune"
+          }
+        }
+      }
+    },
+    "^[%lld fichier](inflect: true) copiés et vérifiés : chaque copie est identique à l'original (empreinte SHA-256)." : {
+
+    },
+    "^[%lld fichier](inflect: true) copiés et vérifiés." : {
+
+    },
+    "^[%lld fichier](inflect: true) en plusieurs exemplaires" : {
+
+    },
+    "^[%lld fichier](inflect: true) illisible, ignoré" : {
+
+    },
+    "^[%lld fichier](inflect: true) laissé en place" : {
+
+    },
+    "^[%lld photo](inflect: true)" : {
+
+    },
+    "^[%lld photo](inflect: true) · ^[%lld vidéo](inflect: true)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld photo](inflect: true) · ^[%2$lld vidéo](inflect: true)"
+          }
+        }
+      }
+    },
+    "^[%lld vidéo](inflect: true)" : {
+
+    },
+    "2048 pixels de côté, sRGB, qualité 80 %, sans position GPS" : {
+
+    },
+    "À revoir" : {
+
+    },
+    "Affichage" : {
+
+    },
+    "Afficher dans le Finder" : {
+
+    },
+    "Afficher le dossier de la galerie dans le Finder" : {
+
+    },
+    "Afficher les photos en grille ou en tableau" : {
+
+    },
+    "Ajouter un dossier…" : {
+
+    },
+    "Analyse impossible : à vérifier vous-même" : {
+
+    },
+    "Annuler" : {
+
+    },
+    "Annuler la mise à la corbeille" : {
+
+    },
+    "Annuler supprime les copies déjà faites. La carte n'est jamais modifiée." : {
+
+    },
+    "Aperçu réduit : %@" : {
+
+    },
+    "Aucun défaut détecté" : {
+
+    },
+    "Aucun doublon" : {
+
+    },
+    "Aucun emplacement choisi" : {
+
+    },
+    "Aucun fichier n'existe en plusieurs exemplaires dans vos galeries." : {
+
+    },
+    "Aucune galerie" : {
+
+    },
+    "Aucune photo JPEG, HEIC ou RAW Sony (.ARW) dans le dossier « %@ »." : {
+
+    },
+    "Aucune photo ni vidéo sur la carte « %@ »." : {
+
+    },
+    "Autoriser" : {
+
+    },
+    "Carte détectée" : {
+
+    },
+    "Carte détectée : %@" : {
+
+    },
+    "Ce fichier a changé depuis la recherche." : {
+
+    },
+    "Ces fichiers ne seront pas copiés (format non pris en charge) :" : {
+
+    },
+    "Changer…" : {
+
+    },
+    "Chaque rafale est montrée par sa meilleure photo. Touche S : voir toute la rafale ou la replier." : {
+
+    },
+    "Choisir" : {
+
+    },
+    "Choisir comme meilleure de la rafale" : {
+
+    },
+    "Choisir comme meilleure de la rafale (B)" : {
+
+    },
+    "Choisir le dossier…" : {
+
+    },
+    "Choisir…" : {
+
+    },
+    "Choisissez la carte de l'appareil photo (le disque qui contient le dossier DCIM). Rien ne sera modifié sur la carte." : {
+
+    },
+    "Choisissez le dossier « %@ » lui-même pour autoriser LinkLens à y faire le tri." : {
+
+    },
+    "Choisissez le dossier où enregistrer les photos (%lld) en %@. Les originaux ne sont pas modifiés." : {
+
+    },
+    "Choisissez où ranger vos galeries : un dossier de ce Mac ou d'un disque externe. LinkLens y crée un dossier par année, puis un par séance." : {
+
+    },
+    "Choisissez un dossier de photos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié." : {
+
+    },
+    "Comparaison des fichiers : %lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Comparaison des fichiers : %1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "Copie et vérification : %lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Copie et vérification : %1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "Copie gardée hors d'atteinte (%@) : rien ne sera déplacé dans ce groupe." : {
+
+    },
+    "Copier les photos et vidéos d'une carte SD dans une nouvelle galerie" : {
+
+    },
+    "Copier les photos et vidéos de la carte dans une nouvelle galerie" : {
+
+    },
+    "Copies mises à la corbeille : %lld (%@)." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Copies mises à la corbeille : %1$lld (%2$@)."
+          }
+        }
+      }
+    },
+    "Copies remises à leur place : %lld." : {
+
+    },
+    "Corbeille" : {
+
+    },
+    "Création de la galerie : %lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Création de la galerie : %1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "Date de la séance" : {
+
+    },
+    "Décocher pour laisser toutes les copies de ce fichier en place" : {
+
+    },
+    "Dimensions" : {
+
+    },
+    "Disque « %@ » non connecté" : {
+
+    },
+    "Dossier créé" : {
+
+    },
+    "Dossier inaccessible" : {
+
+    },
+    "Dossier introuvable" : {
+
+    },
+    "Dossier introuvable : %@" : {
+
+    },
+    "Doublons" : {
+
+    },
+    "Doublons…" : {
+
+    },
+    "du %@ au %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "du %1$@ au %2$@"
+          }
+        }
+      }
+    },
+    "Échecs : %lld" : {
+
+    },
+    "Écriture impossible : %@" : {
+
+    },
+    "Emplacement" : {
+
+    },
+    "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés." : {
+
+    },
+    "Espace récupérable : %@" : {
+
+    },
+    "Export annulé" : {
+
+    },
+    "Export en %@ : %lld sur %lld" : {
+
+    },
+    "Export impossible" : {
+
+    },
+    "Exporter des photos" : {
+
+    },
+    "Exporter ici" : {
+
+    },
+    "Exporter…" : {
+
+    },
+    "Fermer" : {
+
+    },
+    "Fichier" : {
+
+    },
+    "Fichier introuvable." : {
+
+    },
+    "Fichiers identiques octet par octet, dans toutes vos galeries. Choisissez la copie à garder : les autres vont dans la corbeille, rien n'est effacé définitivement." : {
+
+    },
+    "Fichiers non copiés correctement :" : {
+
+    },
+    "Fichiers restés sur la carte (format non pris en charge) :" : {
+
+    },
+    "Floue (netteté de l'image %@ < %@)" : {
+
+    },
+    "Floue (netteté du sujet %@ < %@)" : {
+
+    },
+    "Format" : {
+
+    },
+    "Galerie introuvable." : {
+
+    },
+    "Galerie la plus ancienne" : {
+
+    },
+    "Galeries hors d'atteinte, non vérifiées : %@" : {
+
+    },
+    "Gardée · %@" : {
+
+    },
+    "Gardée · votre choix" : {
+
+    },
+    "Garder" : {
+
+    },
+    "Garder cette copie" : {
+
+    },
+    "Grille" : {
+
+    },
+    "Hautes lumières brûlées (%@ des pixels)" : {
+
+    },
+    "HEIC" : {
+
+    },
+    "IA : %@ ·" : {
+
+    },
+    "Ignorer" : {
+
+    },
+    "Import annulé. Les copies déjà faites ont été supprimées de l'emplacement choisi ; la carte n'a pas été modifiée." : {
+
+    },
+    "Import de la carte « %@ »" : {
+
+    },
+    "Import impossible" : {
+
+    },
+    "Import incomplet" : {
+
+    },
+    "Import terminé" : {
+
+    },
+    "Importer" : {
+
+    },
+    "Importer la carte « %@ »" : {
+
+    },
+    "Importer une carte…" : {
+
+    },
+    "Importer…" : {
+
+    },
+    "Importez une carte SD ou un dossier de photos pour commencer." : {
+
+    },
+    "Impossible d'enregistrer le fichier « %@ »." : {
+
+    },
+    "Impossible de convertir l'image « %@ »." : {
+
+    },
+    "Impossible de lire l'image « %@ »." : {
+
+    },
+    "Impossible de lire la carte « %@ ». Vérifiez qu'elle est bien insérée." : {
+
+    },
+    "Impossible de préparer l'image pour l'analyse." : {
+
+    },
+    "Inconnu" : {
+
+    },
+    "Indexation : %lld sur %lld" : {
+
+    },
+    "Indexation impossible" : {
+
+    },
+    "Indexer" : {
+
+    },
+    "Indexer un dossier de photos sans le copier" : {
+
+    },
+    "JPEG pour l'impression" : {
+
+    },
+    "JPEG pour le web" : {
+
+    },
+    "L'emplacement « %@ » n'est pas disponible. Choisissez-en un autre." : {
+
+    },
+    "L'export des vidéos n'est pas encore disponible (« %@ »)." : {
+
+    },
+    "L'export lit les fichiers originaux." : {
+
+    },
+    "La copie gardée a changé depuis la recherche : rien n'a été déplacé." : {
+
+    },
+    "La copie gardée est introuvable : rien n'a été déplacé." : {
+
+    },
+    "La copie n'est pas identique à l'original (empreinte différente)." : {
+
+    },
+    "La mise à la corbeille déplace les fichiers originaux." : {
+
+    },
+    "La photo sélectionnée (%@)" : {
+
+    },
+    "Laissée en place" : {
+
+    },
+    "Laissée en place · %@" : {
+
+    },
+    "Le dossier « %@ » n'est plus disponible. Choisissez-en un autre." : {
+
+    },
+    "Le dossier a peut-être été déplacé, renommé ou supprimé. Les miniatures et le tri restent consultables." : {
+
+    },
+    "Le dossier n'est pas accessible." : {
+
+    },
+    "Le fichier n'est plus dans la corbeille." : {
+
+    },
+    "Le tri lit les fichiers originaux." : {
+
+    },
+    "Lecture de la carte « %@ »…" : {
+
+    },
+    "Lecture impossible sur la carte : %@" : {
+
+    },
+    "Légèrement floue (netteté de l'image %@ < %@)" : {
+
+    },
+    "Légèrement floue (netteté du sujet %@ < %@)" : {
+
+    },
+    "Les fichiers originaux ne sont pas accessibles : LinkLens montre la plus grande image gardée en cache." : {
+
+    },
+    "Les fichiers sont copiés puis vérifiés un par un. Rien n'est modifié ni supprimé sur la carte." : {
+
+    },
+    "Les fichiers sont copiés, mais la galerie n'a pas pu être créée : %@" : {
+
+    },
+    "Les miniatures et le tri restent consultables. Branchez le disque pour exporter ou trier à nouveau : tout revient sans relancer LinkLens." : {
+
+    },
+    "Les originaux ne sont jamais modifiés." : {
+
+    },
+    "Les photos à garder (%lld)" : {
+
+    },
+    "LinkLens n'a pas l'autorisation de lire le dossier « %@ ». Choisissez-le à nouveau." : {
+
+    },
+    "LinkLens n'a pas l'autorisation de modifier ce dossier." : {
+
+    },
+    "Mariage Julie & Tom" : {
+
+    },
+    "Masquer" : {
+
+    },
+    "Masquer jusqu'à la prochaine insertion de la carte" : {
+
+    },
+    "Meilleure de la rafale" : {
+
+    },
+    "Meilleure photo de la rafale" : {
+
+    },
+    "Meilleure photo de la rafale, votre choix" : {
+
+    },
+    "Meilleure selon l'IA" : {
+
+    },
+    "Mettre ^[%lld copie](inflect: true) à la corbeille ?" : {
+
+    },
+    "Mettre ^[%lld copie](inflect: true) à la corbeille…" : {
+
+    },
+    "Mettre à la corbeille" : {
+
+    },
+    "Mis à la corbeille, mais LinkLens ne pourra pas l'en sortir." : {
+
+    },
+    "Moins bonne de la rafale (meilleure : %@)" : {
+
+    },
+    "Ne formatez pas la carte : tous ses fichiers ne sont pas copiés à l'identique." : {
+
+    },
+    "Nom de la séance" : {
+
+    },
+    "Nom le plus simple" : {
+
+    },
+    "OK" : {
+
+    },
+    "Oublier votre choix : le verdict proposé par l'IA s'applique à nouveau" : {
+
+    },
+    "P Garder · U À revoir · X Rejeter · A IA. Rien n'est supprimé." : {
+
+    },
+    "Pas assez de place à cet emplacement : il faut %@, il reste %@." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pas assez de place à cet emplacement : il faut %1$@, il reste %2$@."
+          }
+        }
+      }
+    },
+    "Pas de miniature en cache" : {
+
+    },
+    "Pas encore triée" : {
+
+    },
+    "Photo %lld sur %lld" : {
+
+    },
+    "Photo précédente" : {
+
+    },
+    "Photo suivante" : {
+
+    },
+    "Photo utilitaire (document, capture d'écran…)" : {
+
+    },
+    "Photos" : {
+
+    },
+    "Photos exportées : %lld, dans « %@ »" : {
+
+    },
+    "Photos triées à la main. Un nouveau tri par l'IA ne les change pas." : {
+
+    },
+    "Pleine résolution, 8 bits, sRGB, compression sans perte (LZW), 300 ppp" : {
+
+    },
+    "Pleine résolution, Display P3, qualité 85 %" : {
+
+    },
+    "Pleine résolution, sRGB, qualité 92 %, 300 ppp" : {
+
+    },
+    "Pour copier les photos de la carte « %@ », cliquez sur « Autoriser » sans changer de dossier. Rien ne sera modifié sur la carte." : {
+
+    },
+    "Pour envoyer par e-mail ou publier en ligne. Fichiers légers." : {
+
+    },
+    "Pour faire tirer vos photos. Pleine résolution." : {
+
+    },
+    "Pour les appareils Apple. Pleine résolution, deux fois plus léger qu'un JPEG." : {
+
+    },
+    "Pour mettre des copies en double à la corbeille, LinkLens a besoin de votre accord pour modifier le dossier « %@ ». Seules les copies que vous avez confirmées seront déplacées." : {
+
+    },
+    "Préparation…" : {
+
+    },
+    "Presque aussi bonne que %@, la meilleure de la rafale" : {
+
+    },
+    "Prise de vue" : {
+
+    },
+    "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé." : {
+
+    },
+    "Proposition de l'IA" : {
+
+    },
+    "Proposition de l'IA : %@" : {
+
+    },
+    "Rafale" : {
+
+    },
+    "Rafale %lld" : {
+
+    },
+    "Rafale %lld · %lld photos (S pour replier)" : {
+
+    },
+    "Rafale %lld · %lld photos (S pour toutes les voir)" : {
+
+    },
+    "Rafale %lld, %lld photos" : {
+
+    },
+    "Rafale de %lld photos : voir toutes les photos (S)" : {
+
+    },
+    "Rafale de %lld photos, repliée" : {
+
+    },
+    "Rafales : %lld" : {
+
+    },
+    "Raison" : {
+
+    },
+    "Raison inconnue (version plus récente de LinkLens)" : {
+
+    },
+    "Rangés dans" : {
+
+    },
+    "Rechercher les doublons" : {
+
+    },
+    "Rechercher les fichiers identiques dans toutes vos galeries" : {
+
+    },
+    "Rejeter" : {
+
+    },
+    "Replier la rafale" : {
+
+    },
+    "Replier la rafale (S)" : {
+
+    },
+    "Replier la rafale %lld" : {
+
+    },
+    "Retour" : {
+
+    },
+    "Revenir à la meilleure selon l'IA" : {
+
+    },
+    "Revenir à la proposition de l'IA (A)" : {
+
+    },
+    "Revenir aux photos (Espace ou Échap)" : {
+
+    },
+    "Sans aucune perte, pour la retouche. Fichiers très lourds." : {
+
+    },
+    "Score esthétique faible (%@)" : {
+
+    },
+    "Sélectionnez une galerie" : {
+
+    },
+    "Sous-exposée (%@ de pixels noirs)" : {
+
+    },
+    "Sujet collé à un bord (marge %@)" : {
+
+    },
+    "Sujet collé au bord droit (marge %@)" : {
+
+    },
+    "Sujet collé au bord du bas (marge %@)" : {
+
+    },
+    "Sujet collé au bord du haut (marge %@)" : {
+
+    },
+    "Sujet collé au bord gauche (marge %@)" : {
+
+    },
+    "Sujet coupé par le bas" : {
+
+    },
+    "Sujet coupé par le bord droit" : {
+
+    },
+    "Sujet coupé par le bord gauche" : {
+
+    },
+    "Sujet coupé par le haut" : {
+
+    },
+    "Sujet coupé par un bord" : {
+
+    },
+    "Tableau" : {
+
+    },
+    "Taille" : {
+
+    },
+    "Terminé" : {
+
+    },
+    "TIFF" : {
+
+    },
+    "Touches pour trier la photo sélectionnée à la main : P Garder, U À revoir, X Rejeter, A revenir à la proposition de l'IA. ⌘Z annule. « Rejeter » ne supprime aucun fichier." : {
+
+    },
+    "Toutes les photos (%lld)" : {
+
+    },
+    "Traiter ce groupe" : {
+
+    },
+    "Très surexposée (%@ de pixels brûlés)" : {
+
+    },
+    "Tri" : {
+
+    },
+    "Tri des photos : %lld sur %lld" : {
+
+    },
+    "Tri en attente…" : {
+
+    },
+    "Tri impossible" : {
+
+    },
+    "Triée « Garder »" : {
+
+    },
+    "Trier à nouveau" : {
+
+    },
+    "Trier les photos" : {
+
+    },
+    "Un autre fichier porte déjà ce nom à cet endroit." : {
+
+    },
+    "Utiliser cet emplacement pour les prochains imports" : {
+
+    },
+    "Vidéo" : {
+
+    },
+    "Voir toute la rafale" : {
+
+    },
+    "Voir toute la rafale %lld" : {
+
+    },
+    "Voir toutes les photos de la rafale (S)" : {
+
+    },
+    "Vos choix : %lld" : {
+
+    },
+    "votre choix" : {
+
+    },
+    "Votre choix" : {
+
+    },
+    "Vous pouvez formater la carte." : {
+
+    },
+    "Yeux fermés (%lld visages)" : {
+
+    },
+    "Yeux fermés (1 visage)" : {
+
+    }
   },
   "version" : "1.0"
 }
