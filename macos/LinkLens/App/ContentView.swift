@@ -66,8 +66,6 @@ struct ContentView: View {
                 Text(cullingController.errorMessage ?? "")
             }
         }
-        // Sidebar + every table column at its minimum width (see `GalleryDetailView`).
-        //EXP
     }
 }
 
@@ -85,6 +83,7 @@ struct ContentView: View {
         .environment(CardMonitor())
         .environment(DuplicatesController(store: store))
         .environment(GalleryAvailabilityMonitor(store: store))
+        .environment(DetailsBackfillController(store: store))
         .modelContainer(container)
 }
 

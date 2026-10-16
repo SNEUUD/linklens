@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import SwiftData
 
@@ -47,6 +48,34 @@ final class Photo {
     /// by the duplicate search, only for files whose size matches another file's.
     var sha256: String?
 
+    // Inspector (interface batch 3). All optional: SwiftData adds the columns to older catalogues by
+    // itself (a "lightweight migration"), and nil means "not read yet". Stored rather than read on
+    // demand, so the inspector still shows everything while the disk is unplugged (F9).
+    /// EXIF, read at indexing time (or by `DetailsBackfiller` for photos indexed earlier).
+    var cameraMake: String?
+    var cameraModel: String?
+    var lensModel: String?
+    /// Seconds (0.00625 = 1/160 s).
+    var exposureTime: Double?
+    var fNumber: Double?
+    var iso: Int?
+    /// Millimetres.
+    var focalLength: Double?
+    /// Main subject found by Vision during the analysis, normalized (0…1) with a top-left origin.
+    /// Four numbers rather than a `CGRect`: plain columns that every SwiftData version stores the same way.
+    var subjectX: Double?
+    var subjectY: Double?
+    var subjectWidth: Double?
+    var subjectHeight: Double?
+    /// Share of burnt highlights and blocked shadows (0…1), measured by the analysis.
+    var highlightClipping: Double?
+    var shadowClipping: Double?
+    /// Length of a video, in seconds.
+    var videoDuration: Double?
+    /// When the analysis details above (subject, exposure) were last read from the file, even if the file
+    /// could not be read then. Nil for a photo analysed before batch 3: `DetailsBackfiller` fills it in.
+    var detailsReadAt: Date?
+
     init(draft: PhotoDraft) {
         id = draft.id
         relativePath = draft.relativePath
@@ -56,6 +85,10 @@ final class Photo {
         pixelHeight = draft.pixelHeight
         importedAt = draft.importedAt
         mediaKindRaw = draft.mediaKind.rawValue
+        capture = draft.capture
+        videoDuration = draft.duration
+        // A video has no analysis: what the inspector shows of it was just read.
+        if draft.mediaKind == .video { detailsReadAt = draft.importedAt }
     }
 }
 
@@ -80,6 +113,39 @@ extension Photo {
         userVerdict ?? cullingVerdict
     }
 
+    /// Camera, lens and settings, as read from the EXIF.
+    var capture: CaptureInfo {
+        get {
+            CaptureInfo(
+                cameraMake: cameraMake, cameraModel: cameraModel, lensModel: lensModel,
+                exposureTime: exposureTime, fNumber: fNumber, iso: iso, focalLength: focalLength
+            )
+        }
+        set {
+            cameraMake = newValue.cameraMake
+            cameraModel = newValue.cameraModel
+            lensModel = newValue.lensModel
+            exposureTime = newValue.exposureTime
+            fNumber = newValue.fNumber
+            iso = newValue.iso
+            focalLength = newValue.focalLength
+        }
+    }
+
+    /// Nil when unknown: not analysed yet, no subject found, or analysed before batch 3.
+    var subjectBox: CGRect? {
+        get {
+            guard let subjectX, let subjectY, let subjectWidth, let subjectHeight else { return nil }
+            return CGRect(x: subjectX, y: subjectY, width: subjectWidth, height: subjectHeight)
+        }
+        set {
+            subjectX = newValue.map { Double($0.minX) }
+            subjectY = newValue.map { Double($0.minY) }
+            subjectWidth = newValue.map { Double($0.width) }
+            subjectHeight = newValue.map { Double($0.height) }
+        }
+    }
+
     var cullingReasons: [CullingReason] {
         guard let cullingReasonsData else { return [] }
         return (try? JSONDecoder().decode([CullingReason].self, from: cullingReasonsData)) ?? []
@@ -95,7 +161,39 @@ extension Photo {
         aestheticsScore = result.aesthetics
         burstNumber = result.burstNumber
         isBestOfBurst = result.isBestOfBurst
+        // A photo that could not be read keeps what was known of it.
+        if let measured = result.measured {
+            apply(PhotoDetails(photoId: id, capture: result.capture, measured: measured, readAt: analyzedAt))
+        }
     }
+
+    /// Stores what the inspector shows. Only these fields: never a verdict nor a choice of the user.
+    func apply(_ details: PhotoDetails) {
+        if let capture = details.capture { self.capture = capture }
+        if let measured = details.measured {
+            subjectBox = measured.subjectBox
+            highlightClipping = measured.highlightClipping
+            shadowClipping = measured.shadowClipping
+        }
+        if let duration = details.videoDuration { videoDuration = duration }
+        detailsReadAt = details.readAt
+    }
+}
+
+/// What the analysis (or `DetailsBackfiller`) learnt about a photo for the inspector, apart from its verdict.
+/// A nil part was not read (unreadable file) and leaves the stored values as they are.
+struct PhotoDetails: Sendable, Equatable {
+    struct Measured: Sendable, Equatable {
+        var subjectBox: CGRect?
+        var highlightClipping: Double
+        var shadowClipping: Double
+    }
+
+    var photoId: UUID
+    var capture: CaptureInfo? = nil
+    var measured: Measured? = nil
+    var videoDuration: Double? = nil
+    var readAt: Date
 }
 
 /// Every stored field of a photo, kept while its file is in the trash (F5) so "Annuler" can put the
@@ -119,6 +217,12 @@ struct PhotoSnapshot: Sendable, Equatable {
     var sha256: String?
     var userVerdictRaw: String? = nil
     var bestOfBurstChosenAt: Date? = nil
+    var capture = CaptureInfo()
+    var subjectBox: CGRect? = nil
+    var highlightClipping: Double? = nil
+    var shadowClipping: Double? = nil
+    var videoDuration: Double? = nil
+    var detailsReadAt: Date? = nil
 }
 
 extension Photo {
@@ -129,7 +233,9 @@ extension Photo {
             cullingVerdictRaw: cullingVerdictRaw, cullingReasonsData: cullingReasonsData, analyzedAt: analyzedAt,
             sharpness: sharpness, aestheticsScore: aestheticsScore, burstNumber: burstNumber,
             isBestOfBurst: isBestOfBurst, sha256: sha256, userVerdictRaw: userVerdictRaw,
-            bestOfBurstChosenAt: bestOfBurstChosenAt
+            bestOfBurstChosenAt: bestOfBurstChosenAt, capture: capture, subjectBox: subjectBox,
+            highlightClipping: highlightClipping, shadowClipping: shadowClipping,
+            videoDuration: videoDuration, detailsReadAt: detailsReadAt
         )
     }
 
@@ -154,6 +260,12 @@ extension Photo {
         sha256 = snapshot.sha256
         userVerdictRaw = snapshot.userVerdictRaw
         bestOfBurstChosenAt = snapshot.bestOfBurstChosenAt
+        capture = snapshot.capture
+        subjectBox = snapshot.subjectBox
+        highlightClipping = snapshot.highlightClipping
+        shadowClipping = snapshot.shadowClipping
+        videoDuration = snapshot.videoDuration
+        detailsReadAt = snapshot.detailsReadAt
     }
 }
 
@@ -175,6 +287,8 @@ struct PhotoDraft: Sendable, Equatable {
     var pixelHeight: Int
     var importedAt: Date
     var mediaKind: MediaKind
+    var capture: CaptureInfo
+    var duration: Double?
 
     init(file: PhotoFile, metadata: PhotoMetadata, importedAt: Date) {
         relativePath = file.relativePath
@@ -183,6 +297,8 @@ struct PhotoDraft: Sendable, Equatable {
         captureDate = metadata.captureDate
         pixelWidth = metadata.pixelWidth
         pixelHeight = metadata.pixelHeight
+        capture = metadata.capture
+        duration = metadata.duration
         self.importedAt = importedAt
     }
 }

@@ -6,8 +6,30 @@ struct PhotoMetadata: Sendable, Equatable {
     /// Dimensions as displayed (width and height swapped for portrait photos), 0 when unknown.
     var pixelWidth: Int
     var pixelHeight: Int
+    /// Camera, lens and settings (EXIF), shown by the inspector. Empty for a video or a file without EXIF.
+    var capture = CaptureInfo()
+    /// Length of a video, in seconds. Nil for a photo, or a video AVFoundation cannot open.
+    var duration: Double? = nil
 
     static let unknown = PhotoMetadata(captureDate: nil, pixelWidth: 0, pixelHeight: 0)
+}
+
+/// What the camera wrote about how the photo was taken. Every field is optional: phones, scanners
+/// and edited files often leave some out.
+struct CaptureInfo: Sendable, Equatable {
+    /// « SONY », « Canon », « Apple ».
+    var cameraMake: String?
+    /// « ILCE-6000 », « Canon EOS R6 », « iPhone 15 Pro ».
+    var cameraModel: String?
+    /// « E 55-210mm F4.5-6.3 OSS ».
+    var lensModel: String?
+    /// Shutter speed, in seconds (0.00625 = 1/160 s).
+    var exposureTime: Double?
+    /// Aperture: 5.6 for f/5,6.
+    var fNumber: Double?
+    var iso: Int?
+    /// Focal length, in millimetres (as written by the camera, not the 35 mm equivalent).
+    var focalLength: Double?
 }
 
 /// Reads EXIF metadata with ImageIO. Only the file header is read: no pixel is decoded.
@@ -30,7 +52,34 @@ enum PhotoMetadataReader {
             exif[kCGImagePropertyExifDateTimeOriginal] as? String,
             subseconds: exif[kCGImagePropertyExifSubsecTimeOriginal] as? String
         )
-        return PhotoMetadata(captureDate: date, pixelWidth: width, pixelHeight: height)
+        return PhotoMetadata(captureDate: date, pixelWidth: width, pixelHeight: height, capture: captureInfo(from: properties))
+    }
+
+    /// Camera, lens and settings from the ImageIO properties of a file (TIFF, EXIF and EXIF aux dictionaries).
+    static func captureInfo(from properties: [CFString: Any]) -> CaptureInfo {
+        let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+        let exifAux = properties[kCGImagePropertyExifAuxDictionary] as? [CFString: Any] ?? [:]
+        // `as? NSNumber` then `.doubleValue`: EXIF numbers come as Objective-C numbers.
+        func number(_ dictionary: [CFString: Any], _ key: CFString) -> Double? {
+            (dictionary[key] as? NSNumber)?.doubleValue
+        }
+        func text(_ dictionary: [CFString: Any], _ key: CFString) -> String? {
+            // Some cameras pad their strings with spaces or NUL characters.
+            let value = (dictionary[key] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\0")))
+            return value?.isEmpty == false ? value : nil
+        }
+        let iso = (exif[kCGImagePropertyExifISOSpeedRatings] as? [NSNumber])?.first?.intValue
+        return CaptureInfo(
+            cameraMake: text(tiff, kCGImagePropertyTIFFMake),
+            cameraModel: text(tiff, kCGImagePropertyTIFFModel),
+            lensModel: text(exif, kCGImagePropertyExifLensModel) ?? text(exifAux, kCGImagePropertyExifAuxLensModel),
+            exposureTime: number(exif, kCGImagePropertyExifExposureTime).flatMap { $0 > 0 ? $0 : nil },
+            fNumber: number(exif, kCGImagePropertyExifFNumber).flatMap { $0 > 0 ? $0 : nil },
+            iso: iso.flatMap { $0 > 0 ? $0 : nil },
+            focalLength: number(exif, kCGImagePropertyExifFocalLength).flatMap { $0 > 0 ? $0 : nil }
+        )
     }
 
     /// Parses "2026:09:20 14:40:57" (camera local time, no time zone) plus optional sub-seconds ("25" = 0.25 s).

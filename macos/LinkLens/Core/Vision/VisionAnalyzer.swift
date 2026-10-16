@@ -57,6 +57,13 @@ enum VisionAnalyzer {
         )
     }
 
+    /// Only the subject box, for photos analysed before it was stored (`DetailsBackfiller`): the same
+    /// saliency request as `analyze`, without the three others.
+    static func subjectBox(of image: CGImage) async throws -> CGRect? {
+        let saliency = try await ImageRequestHandler(image).perform(GenerateObjectnessBasedSaliencyImageRequest())
+        return subjectBox(from: saliency)
+    }
+
     /// "Objectness" saliency finds the objects that stand out (here: the car).
     /// Several boxes are merged so a subject split in two still counts as one.
     private static func subjectBox(from saliency: SaliencyImageObservation) -> CGRect? {

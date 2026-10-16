@@ -101,6 +101,44 @@ actor LibraryStore {
         return try modelContext.fetch(descriptor).map(\.id)
     }
 
+    // MARK: - Inspector details (interface batch 3)
+
+    /// Galleries with photos analysed before their details were stored (or videos indexed before their
+    /// length was), most recent gallery first.
+    func galleriesNeedingDetails() throws -> [UUID] {
+        let video = MediaKind.video.rawValue
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate {
+            $0.detailsReadAt == nil && ($0.analyzedAt != nil || $0.mediaKindRaw == video)
+        }))
+        let galleries = Set(photos.compactMap(\.gallery)).filter { $0.indexedAt != nil }
+        return galleries.sorted { $0.createdAt > $1.createdAt }.map(\.id)
+    }
+
+    /// The photos of a gallery whose details are missing, as `Sendable` copies, with the folder bookmark.
+    func detailsWork(galleryId: UUID) throws -> DetailsWork {
+        let gallery = try fetchGallery(id: galleryId)
+        let video = MediaKind.video.rawValue
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate {
+            $0.gallery?.id == galleryId && $0.detailsReadAt == nil && ($0.analyzedAt != nil || $0.mediaKindRaw == video)
+        }))
+        return DetailsWork(
+            folderBookmark: gallery.folderBookmark,
+            items: photos.map { DetailsWork.Item(photoId: $0.id, relativePath: $0.relativePath, mediaKind: $0.mediaKind) }
+        )
+    }
+
+    /// Stores one batch of details. Only the inspector's fields change: verdicts, reasons, bursts and the
+    /// user's choices are left exactly as they are.
+    func saveDetails(_ details: [PhotoDetails]) throws {
+        let ids = details.map(\.photoId)
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) }))
+        let photosById = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
+        for detail in details {
+            photosById[detail.photoId]?.apply(detail)
+        }
+        try modelContext.save()
+    }
+
     // MARK: - Duplicates (F5)
 
     /// Every file of the fully indexed galleries, with the location of each gallery.
@@ -223,6 +261,18 @@ extension Gallery {
             volumeName: volumeName, volumeUUID: volumeUUID
         )
     }
+}
+
+/// What `DetailsBackfiller` has to read in one gallery.
+struct DetailsWork: Sendable {
+    struct Item: Sendable, Equatable {
+        var photoId: UUID
+        var relativePath: String
+        var mediaKind: MediaKind
+    }
+
+    var folderBookmark: Data
+    var items: [Item]
 }
 
 /// `Sendable` snapshot of a gallery, handed from `LibraryStore` to the analysis.

@@ -12,6 +12,10 @@ struct CullingResult: Sendable, Equatable {
     var isBestOfBurst = false
     var sharpness: Double?
     var aesthetics: Double?
+    /// What the analysis measured anyway, stored for the inspector (nil for an unreadable photo).
+    /// Not used to choose the verdict: that is `reasons`.
+    var measured: PhotoDetails.Measured? = nil
+    var capture: CaptureInfo? = nil
 }
 
 /// Turns measurements into Garder / À revoir / Rejeter, always with the reasons.
@@ -65,7 +69,13 @@ enum Classifier {
                 burstNumber: burstNumbers[index],
                 isBestOfBurst: bestOfBurst[index],
                 sharpness: analysis.sharpness.sharpness,
-                aesthetics: analysis.vision.aesthetics
+                aesthetics: analysis.vision.aesthetics,
+                measured: PhotoDetails.Measured(
+                    subjectBox: analysis.vision.subjectBox,
+                    highlightClipping: analysis.exposure.highlightClipping,
+                    shadowClipping: analysis.exposure.shadowClipping
+                ),
+                capture: analysis.capture
             )
         }
     }

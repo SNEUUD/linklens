@@ -13,6 +13,7 @@ struct LinkLensApp: App {
     @State private var cardMonitor: CardMonitor
     @State private var duplicatesController: DuplicatesController
     @State private var availabilityMonitor: GalleryAvailabilityMonitor
+    @State private var detailsController: DetailsBackfillController
 
     init() {
         do {
@@ -35,7 +36,17 @@ struct LinkLensApp: App {
         // F9: which galleries have their disk plugged in. When a disk comes back, the galleries that
         // could not be sorted while it was away are sorted now (only those never sorted).
         let availability = GalleryAvailabilityMonitor(store: store)
-        availability.onGalleriesBecameAvailable = { _ in culling.cullPendingGalleries() }
+        // Inspector details of the photos sorted before batch 3, read again in the background. Not for a
+        // gallery whose disk is unplugged, nor one being sorted (the sorting stores them itself).
+        let details = DetailsBackfillController(store: store)
+        details.canRead = { galleryId in
+            availability.availability(of: galleryId).canUseOriginals && !culling.isBusy(galleryId: galleryId)
+        }
+        _detailsController = State(initialValue: details)
+        availability.onGalleriesBecameAvailable = { _ in
+            culling.cullPendingGalleries()
+            details.fillPendingGalleries()
+        }
         _availabilityMonitor = State(initialValue: availability)
         let duplicates = DuplicatesController(store: store)
         duplicates.galleryAvailability = { availability.availability(of: $0) }
@@ -47,6 +58,7 @@ struct LinkLensApp: App {
         // the real catalogue.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             culling.cullPendingGalleries()
+            details.fillPendingGalleries()
             monitor.start()
             availability.start()
         }
@@ -62,6 +74,7 @@ struct LinkLensApp: App {
                 .environment(cardMonitor)
                 .environment(duplicatesController)
                 .environment(availabilityMonitor)
+                .environment(detailsController)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)
