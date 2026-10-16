@@ -105,6 +105,8 @@ struct PresentationMenuCommands: View {
     @FocusedValue(\.galleryPresentation) private var actions
     // The same stored value as the slider of the gallery: both always agree.
     @AppStorage(ThumbnailSize.storageKey) private var thumbnailWidth = ThumbnailSize.standard
+    /// The same stored value as the inspector button of the toolbar.
+    @AppStorage("isInspectorShown") private var isInspectorShown = true
 
     var body: some View {
         ForEach(VerdictFilter.allCases, id: \.self) { filter in
@@ -126,6 +128,10 @@ struct PresentationMenuCommands: View {
         Button("Réduire les vignettes") { thumbnailWidth = ThumbnailSize.zoomed(thumbnailWidth, steps: -1) }
             .keyboardShortcut("-", modifiers: .command)
             .disabled(actions?.canResizeThumbnails != true || thumbnailWidth <= ThumbnailSize.range.lowerBound)
+        Divider()
+        Button(isInspectorShown ? "Masquer l'inspecteur" : "Afficher l'inspecteur") { isInspectorShown.toggle() }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .disabled(actions == nil)
         Divider()
     }
 }

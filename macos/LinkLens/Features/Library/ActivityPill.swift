@@ -14,6 +14,8 @@ struct Activity: Identifiable, Equatable, Sendable {
         case exportFinished
         /// F5: search for identical files.
         case duplicates
+        /// Inspector details of photos sorted before they were stored (`DetailsBackfiller`).
+        case details
     }
 
     var kind: Kind
@@ -99,6 +101,13 @@ extension Activity {
             completed: progress?.completedFiles, total: progress?.totalFiles, date: startedAt
         )
     }
+
+    static func details(_ progress: DetailsProgress?, startedAt: Date) -> Activity {
+        Activity(
+            kind: .details, title: String(localized: "Lecture des détails des photos"),
+            completed: progress?.completed, total: progress?.total, date: startedAt
+        )
+    }
 }
 
 /// What the pill shows when several things run at once: the most recent one, and « +1 » for the others.
@@ -131,7 +140,8 @@ enum ActivityPill {
         case .culling: 1
         case .indexing: 2
         case .duplicates: 3
-        case .exportFinished: 4
+        case .details: 4
+        case .exportFinished: 5
         }
     }
 }

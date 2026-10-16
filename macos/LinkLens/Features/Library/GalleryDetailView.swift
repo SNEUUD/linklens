@@ -33,6 +33,7 @@ struct GalleryDetailView: View {
     @Environment(ExportController.self) private var exportController
     @Environment(DuplicatesController.self) private var duplicatesController
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
+    @Environment(DetailsBackfillController.self) private var detailsController
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
     @Query private var photos: [Photo]
@@ -92,6 +93,8 @@ struct GalleryDetailView: View {
             }
             content
                 .frame(maxHeight: .infinity)
+                // While the pill is shown, the last row can scroll above it instead of staying under it.
+                .contentMargins(.bottom, activities.isEmpty ? 0 : ActivityPillView.reservedHeight, for: .scrollContent)
         }
         // `safeAreaInset` pins the pill over the bottom of the photos: they scroll under it, and the
         // last row can still be scrolled above it.
@@ -104,6 +107,22 @@ struct GalleryDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: activities.map(\.kind))
+        // `.inspector` adds a panel on the right that the user shows or hides (macOS 14+), like the
+        // inspectors of Xcode or Pages. Its state is the stored `isInspectorShown`, shared with the
+        // toolbar button and the « Présentation » menu (⌥⌘I).
+        .inspector(isPresented: $isInspectorShown) {
+            PhotoInspector(
+                photo: selectedPhoto,
+                burstMembers: selectedBurstMembers,
+                loader: loader,
+                canUseOriginals: availability.canUseOriginals,
+                onSort: { command in
+                    guard let photoId = selectedPhoto?.id else { return }
+                    sorter.apply(command, to: [photoId])
+                }
+            )
+            .inspectorColumnWidth(min: 280, ideal: 340, max: 440)
+        }
         // VoiceOver says when something starts or ends, like an `aria-live` region.
         .onChange(of: activities.map(\.kind)) { old, new in
             for activity in activities where !old.contains(activity.kind) {
@@ -220,6 +239,19 @@ struct GalleryDetailView: View {
         )
     }
 
+    /// The photo the inspector shows: the selection of the grid, the table or the viewer (for a collapsed
+    /// burst, its cover).
+    private var selectedPhoto: Photo? {
+        guard let selection = browser.selection else { return nil }
+        return photos.first { $0.id == selection }
+    }
+
+    /// Every photo of the selected photo's burst, for « 7 photos prises dans la même seconde ».
+    private var selectedBurstMembers: [Photo] {
+        guard let number = selectedPhoto?.burstNumber else { return [] }
+        return photos.filter { $0.burstNumber == number }
+    }
+
     /// The grid is on screen (the size slider and ⌘+ / ⌘− only apply to it).
     private var showsGrid: Bool {
         layout == .grid && !browser.isViewerOpen
@@ -266,6 +298,10 @@ struct GalleryDetailView: View {
         if duplicatesController.isScanning {
             activities.append(.duplicates(duplicatesController.progress, startedAt: duplicatesController.scanStartedAt ?? .distantPast))
         }
+        // Shown in every gallery, like the duplicate search: it goes through all of them in turn.
+        if detailsController.runningGalleryId != nil {
+            activities.append(.details(detailsController.progress, startedAt: detailsController.startedAt ?? .distantPast))
+        }
         return activities
     }
 
@@ -277,6 +313,7 @@ struct GalleryDetailView: View {
         case .export: exportController.cancel()
         case .exportFinished: exportController.dismissSummary()
         case .duplicates: duplicatesController.cancelScan()
+        case .details: detailsController.cancel()
         }
     }
 
@@ -340,8 +377,8 @@ struct GalleryDetailView: View {
     }
 }
 
-/// The inspector button, apart from the other buttons as in the mockup. The inspector itself comes
-/// with batch 3; its button and remembered state are ready.
+/// The inspector button, apart from the other buttons as in the mockup. ⌥⌘I belongs to the
+/// « Présentation » menu item (one shortcut, one owner), which toggles the same stored value.
 private struct InspectorToggle: ToolbarContent {
     @Binding var isOn: Bool
 
@@ -356,8 +393,7 @@ private struct InspectorToggle: ToolbarContent {
             Toggle(isOn: $isOn) {
                 Label("Inspecteur", systemImage: "sidebar.right")
             }
-            .keyboardShortcut("i", modifiers: [.command, .option])
-            .help(isOn ? "Masquer l'inspecteur" : "Afficher l'inspecteur")
+            .help(isOn ? "Masquer l'inspecteur (⌥⌘I)" : "Afficher l'inspecteur (⌥⌘I)")
         }
     }
 }

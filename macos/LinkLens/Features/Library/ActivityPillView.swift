@@ -7,6 +7,9 @@ import SwiftUI
 /// duplicate search (F5). When several run, the most recent one is shown with « +1 »: a click on it
 /// lists the others, each with its own « Annuler ».
 struct ActivityPillView: View {
+    /// Room kept under the photos while the pill is shown: its height (~44 pt) and a gap; the safe area of the pill adds its own margin.
+    static let reservedHeight: CGFloat = 56
+
     let content: ActivityPill.Content
     /// Cancels (or closes, for a finished export) one activity.
     let onCancel: (Activity.Kind) -> Void
@@ -97,6 +100,7 @@ private struct ActivityRow: View {
         case .export: "square.and.arrow.up"
         case .exportFinished: activity.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
         case .duplicates: "square.on.square"
+        case .details: "info.circle"
         }
     }
 
@@ -105,6 +109,7 @@ private struct ActivityRow: View {
         case .indexing: String(localized: "Arrêter l'indexation. Les fichiers ne sont pas touchés.")
         case .culling: String(localized: "Arrêter le tri. Les verdicts précédents sont gardés.")
         case .export: String(localized: "Arrêter l'export. Les photos déjà exportées sont gardées.")
+        case .details: String(localized: "Arrêter. L'inspecteur montrera moins de détails pour les photos pas encore lues ; reprise au prochain lancement.")
         case .exportFinished, .duplicates: String(localized: "Arrêter")
         }
     }

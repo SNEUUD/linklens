@@ -85,6 +85,12 @@ enum Palette {
     /// The two prints peeking out behind a collapsed burst: front one, then back one.
     static let stackFront = AdaptiveColor(light: 0xCFD0D6, dark: 0x3A3A40)
     static let stackBack = AdaptiveColor(light: 0xDCDDE2, dark: 0x2C2C31)
+    /// Behind a segmented choice (the inspector's Garder / À revoir / Rejeter), like the mockup's `selRow`.
+    static let track = AdaptiveColor(light: 0x000000, dark: 0xFFFFFF, lightOpacity: 0.07, darkOpacity: 0.10)
+    /// A keyboard key drawn in a sentence (« Changez avec P U X »).
+    static let keyCap = AdaptiveColor(light: 0xFFFFFF, dark: 0x2F2F35)
+    /// Thin separators and empty gauges, like the mockup's `line`.
+    static let line = AdaptiveColor(light: 0x000000, dark: 0xFFFFFF, lightOpacity: 0.10, darkOpacity: 0.11)
     /// Bands around a photo shown whole in a cell of another shape.
     static let photoBackground = AdaptiveColor(light: 0xDCDCE2, dark: 0x0C0C0E)
 

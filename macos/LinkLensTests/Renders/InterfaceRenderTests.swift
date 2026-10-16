@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import Testing
@@ -116,5 +117,107 @@ struct InterfaceRenderTests {
             size: CGSize(width: 1280, height: 800),
             appearance: appearance
         )
+    }
+
+    // MARK: - Batch 3: inspector
+
+    /// DSC04311 selected (→ × 4), as proposed by the AI: real thumbnail, real subject box and measurements.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func inspector(appearance: WindowRenderer.Appearance) async throws {
+        try await renderInspector(named: "inspecteur", appearance: appearance) { photo in
+            photo.userVerdictRaw = nil
+        }
+    }
+
+    /// The same photo put in « À revoir » by the user: « Votre choix · l'IA proposait Garder ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func inspectorWithUserChoice(appearance: WindowRenderer.Appearance) async throws {
+        try await renderInspector(named: "inspecteur-votre-choix", appearance: appearance) { photo in
+            photo.userVerdictRaw = "review"
+        }
+    }
+
+    /// Nothing selected yet.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func inspectorEmpty(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try await withInspectorShown {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "inspecteur-vide",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// The pill no longer covers the last row: the last photo selected (→ × 13), the grid scrolled to the end.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func gridEndAbovePill(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.exportController.showProgressForRenders(
+            ExportProgress(galleryId: library.session.id, preset: .webJPEG, completed: 8, total: 26), startedAt: .now
+        )
+        try await withInspectorShown {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "grille-fin-pilule",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            ) { window in
+                for _ in 0..<13 { WindowRenderer.pressRightArrow(in: window) }
+            }
+        }
+    }
+
+    /// The list with the inspector open, at the app's default window size: every column must still fit.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func tableWithInspector(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let defaults = UserDefaults.standard
+        let previousLayout = defaults.object(forKey: "galleryLayout")
+        defaults.set(GalleryLayout.table.rawValue, forKey: "galleryLayout")
+        defer { defaults.set(previousLayout, forKey: "galleryLayout") }
+        try await withInspectorShown {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "tableau-inspecteur",
+                size: CGSize(width: 1280, height: 760),
+                appearance: appearance
+            ) { window in
+                for _ in 0..<4 { WindowRenderer.press(keyCode: 125, characters: String(Character(UnicodeScalar(UInt16(NSDownArrowFunctionKey))!)), in: window) }
+            }
+        }
+    }
+
+    private func renderInspector(
+        named name: String,
+        appearance: WindowRenderer.Appearance,
+        configure: (Photo) -> Void
+    ) async throws {
+        let library = try RenderLibrary()
+        let photo = try #require(library.session.photos.first { $0.relativePath == "DSC04311.ARW" })
+        configure(photo)
+        try library.container.mainContext.save()
+        try await withInspectorShown {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: name,
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            ) { window in
+                for _ in 0..<4 { WindowRenderer.pressRightArrow(in: window) }
+            }
+        }
+    }
+
+    /// The inspector is remembered in the user defaults (`@AppStorage`): shown for the render, then the
+    /// previous value is put back.
+    private func withInspectorShown(_ body: () async throws -> Void) async throws {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: "isInspectorShown")
+        defaults.set(true, forKey: "isInspectorShown")
+        defer { defaults.set(previous, forKey: "isInspectorShown") }
+        try await body()
     }
 }
