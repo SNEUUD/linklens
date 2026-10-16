@@ -49,4 +49,27 @@ enum PreviewLoader {
         }
         return decoded
     }
+
+    /// The whole photo at its full resolution, upright, for the viewer's 100 % zoom. A RAW file is
+    /// really decoded (about a second for a 24-megapixel A6000 file), not its embedded preview.
+    static func loadFullSize(url: URL) throws -> CGImage {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else {
+            throw AnalysisError.unreadableImage(url.lastPathComponent)
+        }
+        // `as?` is a cast that gives nil when it fails (no exception), like a type guard in TypeScript.
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let width = properties?[kCGImagePropertyPixelWidth] as? Int ?? 0
+        let height = properties?[kCGImagePropertyPixelHeight] as? Int ?? 0
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true, // the image itself, never the preview
+            kCGImageSourceCreateThumbnailWithTransform: true, // applies the EXIF rotation
+            kCGImageSourceThumbnailMaxPixelSize: max(width, height, 1),
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw AnalysisError.unreadableImage(url.lastPathComponent)
+        }
+        return image
+    }
 }

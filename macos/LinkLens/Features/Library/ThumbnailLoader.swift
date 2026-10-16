@@ -45,6 +45,8 @@ final class ThumbnailLoader {
     private var idleWaiters: [CheckedContinuation<Void, Never>] = []
     /// Large previews of the viewer, most recent last (a few only: about 7 MB each).
     private var previews: [(photoId: UUID, image: CGImage)] = []
+    /// The last photo read at full resolution (viewer zoom).
+    private var fullSize: (photoId: UUID, image: CGImage)?
     private var isStopped = false
     private var generatedCount = 0
     private var busySince: ContinuousClock.Instant?
@@ -75,6 +77,7 @@ final class ThumbnailLoader {
     /// Closes the folder and wakes up everyone still waiting (with no image).
     func stop() {
         isStopped = true
+        fullSize = nil
         closeFolder()
         resumeIdleWaiters()
     }
@@ -154,6 +157,16 @@ final class ThumbnailLoader {
             previews.append((request.photoId, image))
             if previews.count > 5 { previews.removeFirst() }
         }
+        return image
+    }
+
+    /// The photo at full resolution, for the viewer's 100 % zoom. Only the last one is kept (about
+    /// 96 MB for 24 megapixels). Nil for a video or when the folder is out of reach (F9).
+    func fullImage(for request: ThumbnailRequest) async -> CGImage? {
+        if let fullSize, fullSize.photoId == request.photoId { return fullSize.image }
+        guard let folder, MediaKind(relativePath: request.relativePath) != .video else { return nil }
+        guard let image = await Self.loadFullSize(folder.appending(path: request.relativePath)) else { return nil }
+        fullSize = (request.photoId, image)
         return image
     }
 
@@ -284,6 +297,11 @@ final class ThumbnailLoader {
             logger.error("Thumbnail failed for \(request.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return .unreadable
         }
+    }
+
+    @concurrent
+    private nonisolated static func loadFullSize(_ url: URL) async -> CGImage? {
+        try? PreviewLoader.loadFullSize(url: url)
     }
 
     @concurrent
