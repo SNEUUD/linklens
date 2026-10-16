@@ -1,42 +1,5 @@
 import SwiftUI
 
-/// Banner at the bottom of the sidebar when a camera card is inserted.
-struct DetectedCardBanner: View {
-    let card: DetectedCard
-    let onImport: () -> Void
-    let onDismiss: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "sdcard.fill")
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Carte détectée")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(verbatim: card.name)
-                    .font(.headline)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            Button("Importer…", action: onImport)
-                .buttonStyle(.borderedProminent)
-                .help("Copier les photos et vidéos de la carte dans une nouvelle galerie")
-            Button("Ignorer", systemImage: "xmark", action: onDismiss)
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .help("Masquer jusqu'à la prochaine insertion de la carte")
-        }
-        .padding(10)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
-        .padding(8)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text("Carte détectée : \(card.name)"))
-    }
-}
-
 /// The import sheet: settings, then progress, then the report.
 struct CardImportSheet: View {
     @Environment(CardImportController.self) private var controller

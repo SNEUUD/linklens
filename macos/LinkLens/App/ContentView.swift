@@ -18,26 +18,21 @@ struct ContentView: View {
         @Bindable var importController = importController
 
         NavigationSplitView {
-            GalleryListView(
+            LibrarySidebar(
                 galleries: galleries,
                 selection: $importController.selectedGalleryId,
-                progress: importController.progress,
-                onCancel: importController.cancelIndexing
-            )
-            // `safeAreaInset` pins a view under the list without covering its last rows.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 0) {
-                    ForEach(cardMonitor.cards) { card in
-                        DetectedCardBanner(card: card) {
-                            if cardImportController.importCard(card) {
-                                cardMonitor.dismiss(card)
-                            }
-                        } onDismiss: {
-                            cardMonitor.dismiss(card)
-                        }
+                indexing: importController.progress,
+                onCancelIndexing: importController.cancelIndexing,
+                availability: availabilityMonitor.availability(of:),
+                cards: cardMonitor.cards,
+                onImportCard: { card in
+                    if cardImportController.importCard(card) {
+                        cardMonitor.dismiss(card)
                     }
-                }
-            }
+                },
+                onDismissCard: cardMonitor.dismiss,
+                onShowDuplicates: { isDuplicatesSheetPresented = true }
+            )
         } detail: {
             // `Group` wraps the branches so one modifier (the alert) applies to all of them.
             Group {
@@ -50,13 +45,12 @@ struct ContentView: View {
                     } description: {
                         Text("Importez une carte SD ou un dossier de photos pour commencer.")
                     } actions: {
-                        Button("Importer une carte…", action: cardImportController.chooseCard)
-                            .disabled(cardImportController.isSheetPresented)
-                        Button("Ajouter un dossier…", action: importController.chooseFolder)
-                            .disabled(importController.isIndexing)
+                        ImportMenuItems(showsShortcuts: false, cardTitle: "Importer une carte SD…", folderTitle: "Ajouter un dossier…")
                     }
+                    .toolbar { ImportToolbarMenu() }
                 } else {
                     ContentUnavailableView("Sélectionnez une galerie", systemImage: "sidebar.left")
+                        .toolbar { ImportToolbarMenu() }
                 }
             }
             .alert(
@@ -71,61 +65,8 @@ struct ContentView: View {
                 Text(cullingController.errorMessage ?? "")
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Importer une carte…", systemImage: "sdcard", action: cardImportController.chooseCard)
-                    .disabled(cardImportController.isSheetPresented)
-                    .help("Copier les photos et vidéos d'une carte SD dans une nouvelle galerie")
-            }
-            ToolbarItem(placement: .navigation) {
-                Button("Ajouter un dossier…", systemImage: "folder.badge.plus", action: importController.chooseFolder)
-                    .disabled(importController.isIndexing)
-                    .help("Indexer un dossier de photos sans le copier")
-            }
-            ToolbarItem(placement: .navigation) {
-                Button("Doublons…", systemImage: "square.on.square") { isDuplicatesSheetPresented = true }
-                    .disabled(galleries.isEmpty)
-                    .help("Rechercher les fichiers identiques dans toutes vos galeries")
-            }
-        }
-        .sheet(isPresented: $isDuplicatesSheetPresented) {
-            DuplicatesSheet()
-                .environment(duplicatesController)
-                .environment(availabilityMonitor)
-        }
-        // A gallery added (or removed): its disk is checked, and its name remembered (F9).
-        .onChange(of: galleries.map(\.id)) { availabilityMonitor.refresh() }
-        .sheet(isPresented: Binding(
-            get: { cardImportController.isSheetPresented },
-            set: { if !$0 { cardImportController.close() } }
-        )) {
-            CardImportSheet()
-                .environment(cardImportController)
-        }
-        .alert(
-            "Import impossible",
-            isPresented: Binding(
-                get: { cardImportController.errorMessage != nil },
-                set: { if !$0 { cardImportController.errorMessage = nil } }
-            )
-        ) {
-            Button("OK") {}
-        } message: {
-            Text(cardImportController.errorMessage ?? "")
-        }
-        .alert(
-            "Indexation impossible",
-            isPresented: Binding(
-                get: { importController.errorMessage != nil },
-                set: { if !$0 { importController.errorMessage = nil } }
-            )
-        ) {
-            Button("OK") {}
-        } message: {
-            Text(importController.errorMessage ?? "")
-        }
         // Sidebar + every table column at its minimum width (see `GalleryDetailView`).
-        .frame(minWidth: 1080, minHeight: 560)
+        //EXP
     }
 }
 

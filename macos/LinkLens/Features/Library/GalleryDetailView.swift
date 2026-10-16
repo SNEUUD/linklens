@@ -33,6 +33,8 @@ struct GalleryDetailView: View {
     @Query private var photos: [Photo]
     // `@AppStorage` is a `@State` saved in the user defaults (like `useState` backed by `localStorage`).
     @AppStorage("galleryLayout") private var layout = GalleryLayout.grid
+    /// Whether the inspector is shown (batch 3), remembered between launches.
+    @AppStorage("isInspectorShown") private var isInspectorShown = true
     @State private var browser: GalleryBrowser
     /// Manual sorting (P / U / X / A) with undo, shared by the grid, the table and the viewer.
     @State private var sorter: ManualSorter
@@ -76,34 +78,28 @@ struct GalleryDetailView: View {
             ExportStatusBar(galleryId: gallery.id)
         }
         .navigationTitle(gallery.name)
-        .navigationSubtitle(gallery.folderPath)
+        .navigationSubtitle(subtitle)
         .toolbar {
-            Picker("Affichage", selection: $layout) {
-                Label("Grille", systemImage: "square.grid.2x2").tag(GalleryLayout.grid)
-                Label("Tableau", systemImage: "list.bullet").tag(GalleryLayout.table)
+            // Each `ToolbarItemGroup` is drawn as one capsule, as in the mockup.
+            ToolbarItemGroup {
+                ImportToolbarMenu()
             }
-            .pickerStyle(.segmented)
-            .help("Afficher les photos en grille ou en tableau")
-            Button(
-                gallery.culledAt == nil ? "Trier les photos" : "Trier à nouveau",
-                systemImage: "wand.and.stars"
-            ) {
-                cullingController.cull(galleryId: gallery.id)
+            ToolbarItemGroup {
+                Picker("Affichage", selection: $layout) {
+                    Label("Grille", systemImage: "square.grid.2x2").tag(GalleryLayout.grid)
+                    Label("Liste", systemImage: "list.bullet").tag(GalleryLayout.table)
+                }
+                .pickerStyle(.segmented)
+                .labelStyle(.iconOnly)
+                .help("Afficher les photos en grille ou en liste")
             }
-            .disabled(cullingController.isBusy(galleryId: gallery.id) || !availability.canUseOriginals)
-            .help(availability.help(for: .cull)
-                ?? String(localized: "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé."))
-            Button("Exporter…", systemImage: "square.and.arrow.up") {
-                isExportSheetPresented = true
+            ToolbarItemGroup {
+                galleryActionButtons
             }
-            .keyboardShortcut("e")
-            .disabled(photos.isEmpty || exportController.isExporting || !availability.canUseOriginals)
-            .help(availability.help(for: .export)
-                ?? String(localized: "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés."))
-            Button("Afficher dans le Finder", systemImage: "folder", action: revealInFinder)
-                .disabled(!availability.canUseOriginals)
-                .help(availability.help(for: .reveal) ?? String(localized: "Afficher le dossier de la galerie dans le Finder"))
+            InspectorToggle(isOn: $isInspectorShown)
         }
+        // Publishes the actions of this gallery to the « Galerie » menu of the menu bar.
+        .focusedSceneValue(\.galleryMenuActions, menuActions)
         // `.sheet` shows a modal attached to the window while the Boolean is true (like `<Modal open={…}>`).
         .sheet(isPresented: $isExportSheetPresented) {
             ExportSheet(gallery: gallery, photos: photos, selectedPhotoId: browser.selection)
@@ -149,6 +145,55 @@ struct GalleryDetailView: View {
         }
     }
 
+    /// « Trier à nouveau » (icon) and « Exporter… », with the same rules as the « Galerie » menu.
+    @ViewBuilder private var galleryActionButtons: some View {
+        let actions = menuActions
+        Button(actions.cullTitle, systemImage: "wand.and.stars") { actions.cull?() }
+            .labelStyle(.iconOnly)
+            .disabled(actions.cull == nil)
+            .help(actions.cullHelp)
+        Button("Exporter…", systemImage: "square.and.arrow.up") { actions.export?() }
+            .labelStyle(.titleAndIcon)
+            .disabled(actions.export == nil)
+            .help(actions.exportHelp)
+    }
+
+    /// The gallery actions of the toolbar and of the « Galerie » menu, with the F9 rules: an action
+    /// that reads the originals is nil (disabled) while they are out of reach, and its help says why.
+    private var menuActions: GalleryMenuActions {
+        let galleryId = gallery.id
+        let cullingController = cullingController
+        let canCull = !cullingController.isBusy(galleryId: galleryId) && availability.canUseOriginals
+        let canExport = !photos.isEmpty && !exportController.isExporting && availability.canUseOriginals
+        // Nil (a disabled item) unless the action is possible now.
+        var cull: (@MainActor () -> Void)?
+        var export: (@MainActor () -> Void)?
+        var reveal: (@MainActor () -> Void)?
+        if canCull { cull = { cullingController.cull(galleryId: galleryId) } }
+        if canExport { export = { isExportSheetPresented = true } }
+        if availability.canUseOriginals { reveal = { revealInFinder() } }
+        let defaultCullHelp = String(localized: "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
+        let defaultExportHelp = String(localized: "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés.")
+        let defaultRevealHelp = String(localized: "Afficher le dossier de la galerie dans le Finder")
+        return GalleryMenuActions(
+            cullTitle: gallery.culledAt == nil ? String(localized: "Trier les photos") : String(localized: "Trier à nouveau"),
+            cull: cull,
+            cullHelp: availability.help(for: .cull) ?? defaultCullHelp,
+            export: export,
+            exportHelp: availability.help(for: .export) ?? defaultExportHelp,
+            reveal: reveal,
+            revealHelp: availability.help(for: .reveal) ?? defaultRevealHelp
+        )
+    }
+
+    /// « 52 photos · triée par l'IA · ~/Downloads/photos » under the gallery name.
+    private var subtitle: Text {
+        let summary = GallerySummary(photos.map(\.summaryItem))
+        let state = gallery.culledAt == nil ? Text("pas encore triée") : Text("triée par l'IA")
+        return Text("^[\(summary.photoCount) photo](inflect: true)") + Text(verbatim: " · ") + state
+            + Text(verbatim: " · " + abbreviatedPath(gallery.folderPath, home: realHomeDirectory()))
+    }
+
     /// The viewer when it is open, otherwise the grid or the table.
     // `@ViewBuilder` lets a property return different views from an `if` / `switch`, like a JSX ternary.
     @ViewBuilder private var content: some View {
@@ -190,6 +235,28 @@ struct GalleryDetailView: View {
             NSWorkspace.shared.activateFileViewerSelecting([folder])
         } catch {
             revealError = error.localizedDescription
+        }
+    }
+}
+
+/// The inspector button, apart from the other buttons as in the mockup. The inspector itself comes
+/// with batch 3; its button and remembered state are ready.
+private struct InspectorToggle: ToolbarContent {
+    @Binding var isOn: Bool
+
+    // `ToolbarContent` is to the toolbar what `View` is to the window: a piece of it, built in `body`.
+    var body: some ToolbarContent {
+        if #available(macOS 26, *) {
+            // A gap between two groups of buttons: each group gets its own glass capsule.
+            ToolbarSpacer(.fixed)
+        }
+        ToolbarItem {
+            // A `Toggle` in a toolbar is drawn as a button that stays pressed while on.
+            Toggle(isOn: $isOn) {
+                Label("Inspecteur", systemImage: "sidebar.right")
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .help(isOn ? "Masquer l'inspecteur" : "Afficher l'inspecteur")
         }
     }
 }

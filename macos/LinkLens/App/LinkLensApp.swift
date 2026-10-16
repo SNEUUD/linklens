@@ -68,12 +68,14 @@ struct LinkLensApp: App {
         .modelContainer(container)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Importer une carte…", action: cardImportController.chooseCard)
-                    .keyboardShortcut("i", modifiers: [.command, .shift])
-                    .disabled(cardImportController.isSheetPresented)
-                Button("Ajouter un dossier…", action: importController.chooseFolder)
-                    .keyboardShortcut("o")
-                    .disabled(importController.isIndexing)
+                // The menu bar is outside the window: the controllers are passed to it explicitly.
+                ImportMenuItems(cardTitle: "Importer une carte SD…", folderTitle: "Ajouter un dossier…")
+                    .environment(importController)
+                    .environment(cardImportController)
+            }
+            // `CommandMenu` adds a menu of its own to the menu bar, after « Présentation ».
+            CommandMenu("Galerie") {
+                GalleryMenuCommands()
             }
         }
     }
