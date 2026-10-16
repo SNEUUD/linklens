@@ -190,6 +190,96 @@ struct InterfaceRenderTests {
         }
     }
 
+    // MARK: - Batch 4: full-window viewer
+
+    /// DSC04311 in its open burst (→ × 4, S, space), as proposed by the AI, the subject box shown.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func viewer(appearance: WindowRenderer.Appearance) async throws {
+        try await renderViewer(named: "visualiseur", appearance: appearance) { photo in
+            photo.userVerdictRaw = nil
+        }
+    }
+
+    /// The same photo put in « À revoir » by the user: « Votre choix · l'IA proposait Garder ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func viewerWithUserChoice(appearance: WindowRenderer.Appearance) async throws {
+        try await renderViewer(named: "visualiseur-votre-choix", appearance: appearance) { photo in
+            photo.userVerdictRaw = "review"
+        }
+    }
+
+    /// The viewer with the inspector open (⌥⌘I), at the app's default window size.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func viewerWithInspector(appearance: WindowRenderer.Appearance) async throws {
+        try await renderViewer(named: "visualiseur-inspecteur", appearance: appearance, size: CGSize(width: 1280, height: 760), inspector: true) { photo in
+            photo.userVerdictRaw = nil
+        }
+    }
+
+    /// Z: DSC04311 at 100 %, framed on its subject. The render has no original file: the thumbnail is
+    /// enlarged instead (blurry) and « Lecture de la pleine définition… » stays.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func viewerZoomed(appearance: WindowRenderer.Appearance) async throws {
+        try await renderViewer(named: "visualiseur-zoom", appearance: appearance, extraKeys: [(6, "z")]) { photo in
+            photo.userVerdictRaw = nil
+        }
+    }
+
+    /// F9: the wedding gallery with its disk unplugged, the first photo in the viewer: « Aperçu réduit ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func viewerWithDiskUnplugged(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.availabilityMonitor.refresh()
+        await library.availabilityMonitor.waitUntilIdle()
+        try #require(!library.availabilityMonitor.availability(of: library.wedding.id).canUseOriginals)
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.wedding),
+                named: "visualiseur-apercu-reduit",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            ) { window in
+                WindowRenderer.pressRightArrow(in: window)
+                WindowRenderer.press(keyCode: 49, characters: " ", in: window)
+            }
+        }
+    }
+
+    private func renderViewer(
+        named name: String,
+        appearance: WindowRenderer.Appearance,
+        size: CGSize = CGSize(width: 1440, height: 900),
+        inspector: Bool = false,
+        extraKeys: [(keyCode: UInt16, characters: String)] = [],
+        configure: (Photo) -> Void
+    ) async throws {
+        let library = try RenderLibrary()
+        let photo = try #require(library.session.photos.first { $0.relativePath == "DSC04311.ARW" })
+        configure(photo)
+        try library.container.mainContext.save()
+        let defaults = UserDefaults.standard
+        let previousSubject = defaults.object(forKey: PhotoViewer.showsSubjectKey)
+        defaults.set(true, forKey: PhotoViewer.showsSubjectKey)
+        defer { defaults.set(previousSubject, forKey: PhotoViewer.showsSubjectKey) }
+        try await withInspector(shown: inspector) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: name,
+                size: size,
+                appearance: appearance
+            ) { window in
+                // → × 4: the stack of burst 4 (DSC04311); S opens it; space opens the viewer.
+                for _ in 0..<4 { WindowRenderer.pressRightArrow(in: window) }
+                WindowRenderer.press(keyCode: 1, characters: "s", in: window)
+                WindowRenderer.press(keyCode: 49, characters: " ", in: window)
+                if !extraKeys.isEmpty {
+                    try await Task.sleep(for: .seconds(1))
+                    for key in extraKeys { WindowRenderer.press(keyCode: key.keyCode, characters: key.characters, in: window) }
+                }
+            }
+        }
+    }
+
     private func renderInspector(
         named name: String,
         appearance: WindowRenderer.Appearance,
@@ -214,9 +304,13 @@ struct InterfaceRenderTests {
     /// The inspector is remembered in the user defaults (`@AppStorage`): shown for the render, then the
     /// previous value is put back.
     private func withInspectorShown(_ body: () async throws -> Void) async throws {
+        try await withInspector(shown: true, body)
+    }
+
+    private func withInspector(shown: Bool, _ body: () async throws -> Void) async throws {
         let defaults = UserDefaults.standard
         let previous = defaults.object(forKey: "isInspectorShown")
-        defaults.set(true, forKey: "isInspectorShown")
+        defaults.set(shown, forKey: "isInspectorShown")
         defer { defaults.set(previous, forKey: "isInspectorShown") }
         try await body()
     }

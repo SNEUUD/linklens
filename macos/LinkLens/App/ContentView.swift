@@ -13,12 +13,15 @@ struct ContentView: View {
     @Environment(\.thumbnailCache) private var thumbnailCache
     @Query(sort: \Gallery.createdAt, order: .reverse) private var galleries: [Gallery]
     @State private var isDuplicatesSheetPresented = false
+    /// Sidebar shown or not. The full-window viewer hides it and puts it back as it was when it closes.
+    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    @State private var visibilityBeforeViewer: NavigationSplitViewVisibility?
 
     var body: some View {
         // `@Bindable` gives two-way bindings (`$…`) to the properties of an `@Observable` object.
         @Bindable var importController = importController
 
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             LibrarySidebar(
                 galleries: galleries,
                 selection: $importController.selectedGalleryId,
@@ -34,11 +37,13 @@ struct ContentView: View {
                 onDismissCard: cardMonitor.dismiss,
                 onShowDuplicates: { isDuplicatesSheetPresented = true }
             )
+            // No sidebar button while the viewer takes the whole window: « ‹ Grille » brings it back.
+            .toolbar(removing: visibilityBeforeViewer == nil ? nil : .sidebarToggle)
         } detail: {
             // `Group` wraps the branches so one modifier (the alert) applies to all of them.
             Group {
                 if let gallery = galleries.first(where: { $0.id == importController.selectedGalleryId }) {
-                    GalleryDetailView(gallery: gallery, thumbnailCache: thumbnailCache)
+                    GalleryDetailView(gallery: gallery, thumbnailCache: thumbnailCache, onViewerChange: viewerChanged)
                         .id(gallery.id)
                 } else if galleries.isEmpty {
                     ContentUnavailableView {
@@ -65,6 +70,19 @@ struct ContentView: View {
             } message: {
                 Text(cullingController.errorMessage ?? "")
             }
+        }
+    }
+
+    /// The viewer takes the whole window (as in the mockup): the sidebar folds away while it is open.
+    private func viewerChanged(_ isOpen: Bool) {
+        // Not animated: an animated sidebar while the toolbar changes made AppKit loop over its
+        // constraints until it crashed (seen in the interface renders).
+        if isOpen {
+            if visibilityBeforeViewer == nil { visibilityBeforeViewer = columnVisibility }
+            columnVisibility = .detailOnly
+        } else if let previous = visibilityBeforeViewer {
+            columnVisibility = previous
+            visibilityBeforeViewer = nil
         }
     }
 }

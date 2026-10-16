@@ -132,7 +132,7 @@ private struct PreviewTaskKey: Hashable {
 }
 
 /// The dashed box of the subject: white, with a thin dark edge so it shows on a white car as well.
-private struct SubjectFrame: View {
+struct SubjectFrame: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 3)
         shape
@@ -237,7 +237,7 @@ private struct VerdictPicker: View {
 }
 
 /// A keyboard key in a sentence, like the mockup's `<kbd>`.
-private struct KeyCap: View {
+struct KeyCap: View {
     let key: String
 
     init(_ key: String) { self.key = key }

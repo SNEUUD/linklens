@@ -93,11 +93,13 @@ enum Palette {
     static let line = AdaptiveColor(light: 0x000000, dark: 0xFFFFFF, lightOpacity: 0.10, darkOpacity: 0.11)
     /// Bands around a photo shown whole in a cell of another shape.
     static let photoBackground = AdaptiveColor(light: 0xDCDCE2, dark: 0x0C0C0E)
+    /// Behind the photo in the full-window viewer, like the mockup's `viewer`.
+    static let viewer = AdaptiveColor(light: 0xE9E9ED, dark: 0x0F0F11)
 
     /// The lightest and darkest backgrounds text is drawn on (window, sidebar, selected chip),
     /// in each mode. The contrast test checks every text colour against all of them.
-    static let lightSurfaces = [0xFFFFFF, 0xF8F8FA, 0xECECF0, 0xE3E3E8].map(HexColor.init(hex:))
-    static let darkSurfaces = [0x141416, 0x1E1E1E, 0x26262A, 0x323236].map(HexColor.init(hex:))
+    static let lightSurfaces = [0xFFFFFF, 0xF8F8FA, 0xECECF0, 0xE9E9ED, 0xE3E3E8].map(HexColor.init(hex:))
+    static let darkSurfaces = [0x0F0F11, 0x141416, 0x1E1E1E, 0x26262A, 0x323236].map(HexColor.init(hex:))
 }
 
 extension CullingVerdict {

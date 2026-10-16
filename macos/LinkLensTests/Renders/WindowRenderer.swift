@@ -67,7 +67,12 @@ enum WindowRenderer {
         window.setFrame(frame, display: true)
         window.orderFrontRegardless()
         window.setFrame(frame, display: true)
-        defer { window.close() }
+        defer {
+            // Takes the SwiftUI views down with the window: a closed window kept alive could still write
+            // to the shared settings (`@AppStorage`) and change the next render.
+            window.contentViewController = nil
+            window.close()
+        }
 
         // Waiting with `Task.sleep` on the main actor keeps the main run loop turning: layout,
         // `.task` modifiers and image loading go on meanwhile.

@@ -43,6 +43,8 @@ struct GalleryDetailView: View {
     @AppStorage("isInspectorShown") private var isInspectorShown = true
     /// Smallest width of a thumbnail, the same for every gallery (slider and ⌘+ / ⌘−).
     @AppStorage(ThumbnailSize.storageKey) private var thumbnailWidth = ThumbnailSize.standard
+    /// « Montrer le sujet » in the viewer, remembered between launches.
+    @AppStorage(PhotoViewer.showsSubjectKey) private var showsSubject = true
     @State private var browser: GalleryBrowser
     /// Manual sorting (P / U / X / A) with undo, shared by the grid, the table and the viewer.
     @State private var sorter: ManualSorter
@@ -52,11 +54,21 @@ struct GalleryDetailView: View {
     @State private var isExportSheetPresented = false
     /// Where the filter of each gallery is remembered.
     private let filterStore: VerdictFilterStore
+    /// Told when the viewer opens or closes: the window then hides or shows its sidebar.
+    private let onViewerChange: (Bool) -> Void
 
-    /// - Parameter thumbnailCache: the app's cache; the interface renders pass one of their own.
-    init(gallery: Gallery, thumbnailCache: ThumbnailCache = .standard, filterStore: VerdictFilterStore = VerdictFilterStore()) {
+    /// - Parameters:
+    ///   - thumbnailCache: the app's cache; the interface renders pass one of their own.
+    ///   - onViewerChange: called with true when the full-window viewer opens, false when it closes.
+    init(
+        gallery: Gallery,
+        thumbnailCache: ThumbnailCache = .standard,
+        filterStore: VerdictFilterStore = VerdictFilterStore(),
+        onViewerChange: @escaping (Bool) -> Void = { _ in }
+    ) {
         self.gallery = gallery
         self.filterStore = filterStore
+        self.onViewerChange = onViewerChange
         _loader = State(initialValue: ThumbnailLoader(cache: thumbnailCache))
         let browser = GalleryBrowser()
         // The filter chosen last time in this gallery.
@@ -80,10 +92,11 @@ struct GalleryDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !availability.canUseOriginals {
+            // The viewer takes the whole window: its own « Aperçu réduit » notice replaces the banner.
+            if !availability.canUseOriginals, !browser.isViewerOpen {
                 UnavailableGalleryBar(availability: availability)
             }
-            if !photos.isEmpty {
+            if !photos.isEmpty, !browser.isViewerOpen {
                 VerdictFilterBar(
                     filter: browser.filter,
                     counts: filterCounts,
@@ -94,12 +107,13 @@ struct GalleryDetailView: View {
             content
                 .frame(maxHeight: .infinity)
                 // While the pill is shown, the last row can scroll above it instead of staying under it.
-                .contentMargins(.bottom, activities.isEmpty ? 0 : ActivityPillView.reservedHeight, for: .scrollContent)
+                .contentMargins(.bottom, activities.isEmpty || browser.isViewerOpen ? 0 : ActivityPillView.reservedHeight, for: .scrollContent)
         }
         // `safeAreaInset` pins the pill over the bottom of the photos: they scroll under it, and the
         // last row can still be scrolled above it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let pill = ActivityPill.content(for: activities) {
+            // Not over the viewer's filmstrip: it comes back with the grid.
+            if !browser.isViewerOpen, let pill = ActivityPill.content(for: activities) {
                 ActivityPillView(content: pill, onCancel: cancel, onRevealExport: exportController.revealExportedFiles)
                     .padding(.bottom, 18)
                     .frame(maxWidth: .infinity)
@@ -129,27 +143,20 @@ struct GalleryDetailView: View {
                 AccessibilityNotification.Announcement(activity.title).post()
             }
         }
-        .navigationTitle(gallery.name)
-        .navigationSubtitle(subtitle)
+        // In the viewer, the window's title is the photo's name and its subtitle says where it is.
+        .navigationTitle(viewerPhoto.map { Text(verbatim: $0.fileName) } ?? Text(verbatim: gallery.name))
+        .navigationSubtitle(viewerPhoto == nil ? subtitle : Text(verbatim: viewerContext))
         .toolbar {
-            // Each `ToolbarItemGroup` is drawn as one capsule, as in the mockup.
-            ToolbarItemGroup {
-                ImportToolbarMenu()
+            if browser.isViewerOpen {
+                viewerToolbar
+            } else {
+                galleryToolbar
             }
-            ToolbarItemGroup {
-                Picker("Affichage", selection: $layout) {
-                    Label("Grille", systemImage: "square.grid.2x2").tag(GalleryLayout.grid)
-                    Label("Liste", systemImage: "list.bullet").tag(GalleryLayout.table)
-                }
-                .pickerStyle(.segmented)
-                .labelStyle(.iconOnly)
-                .help("Afficher les photos en grille ou en liste")
-            }
-            ToolbarItemGroup {
-                galleryActionButtons
-            }
-            InspectorToggle(isOn: $isInspectorShown)
         }
+        // Full window: a see-through toolbar over the viewer's background (the sidebar button is removed
+        // by `ContentView`, which owns the sidebar).
+        .toolbarBackgroundVisibility(browser.isViewerOpen ? .hidden : .automatic, for: .windowToolbar)
+        .onChange(of: browser.isViewerOpen) { _, isOpen in onViewerChange(isOpen) }
         // Publishes the actions of this gallery to the « Galerie » and « Présentation » menus.
         .focusedSceneValue(\.galleryMenuActions, menuActions)
         .focusedSceneValue(\.galleryPresentation, presentationActions)
@@ -167,7 +174,10 @@ struct GalleryDetailView: View {
                 loader.closeFolder()
             }
         }
-        .onDisappear { loader.stop() }
+        .onDisappear {
+            loader.stop()
+            onViewerChange(false)
+        }
         // The environment is only known once the view is on screen; the window's undo manager can change.
         .onChange(of: undoManager, initial: true) {
             sorter.context = modelContext
@@ -196,6 +206,59 @@ struct GalleryDetailView: View {
         } message: {
             Text(exportController.errorMessage ?? "")
         }
+    }
+
+    /// Import | Grille / Liste | Trier à nouveau, Exporter… | Inspecteur.
+    @ToolbarContentBuilder private var galleryToolbar: some ToolbarContent {
+        // Each `ToolbarItemGroup` is drawn as one capsule, as in the mockup.
+        ToolbarItemGroup {
+            ImportToolbarMenu()
+        }
+        ToolbarItemGroup {
+            Picker("Affichage", selection: $layout) {
+                Label("Grille", systemImage: "square.grid.2x2").tag(GalleryLayout.grid)
+                Label("Liste", systemImage: "list.bullet").tag(GalleryLayout.table)
+            }
+            .pickerStyle(.segmented)
+            .labelStyle(.iconOnly)
+            .help("Afficher les photos en grille ou en liste")
+        }
+        ToolbarItemGroup {
+            galleryActionButtons
+        }
+        InspectorToggle(isOn: $isInspectorShown)
+    }
+
+    /// The viewer's top bar, as in the mockup: « ‹ Grille » before the title, « Montrer le sujet » and the
+    /// inspector on the right. On macOS 26 each item gets its glass capsule from the system.
+    // `@ToolbarContentBuilder` lets a property list toolbar items, like `@ViewBuilder` for views.
+    @ToolbarContentBuilder private var viewerToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button(action: browser.closeViewer) {
+                Label(layout == .table ? "Liste" : "Grille", systemImage: "chevron.left")
+            }
+            .labelStyle(.titleAndIcon)
+            .help("Revenir aux photos (Espace ou Échap)")
+        }
+        ToolbarItem {
+            Toggle(isOn: $showsSubject) {
+                Label("Montrer le sujet", systemImage: "square.dashed")
+            }
+            .labelStyle(.titleAndIcon)
+            .help(showsSubject ? "Masquer le cadre du sujet trouvé par l'IA" : "Entourer le sujet trouvé par l'IA")
+        }
+        InspectorToggle(isOn: $isInspectorShown)
+    }
+
+    /// The photo shown by the viewer, nil while it is closed.
+    private var viewerPhoto: Photo? {
+        browser.isViewerOpen ? selectedPhoto : nil
+    }
+
+    /// « Rafale 4 ouverte · photo 5 sur 7 », « Photo 12 sur 52 », « À revoir · photo 3 sur 14 ».
+    private var viewerContext: String {
+        guard let index = browser.selectedIndex else { return "" }
+        return ViewerContext.line(entries: browser.entries, index: index, photoCount: photos.count, filter: browser.filter)
     }
 
     /// « Trier à nouveau » (icon) and « Exporter… », with the same rules as the « Galerie » menu.
@@ -330,7 +393,10 @@ struct GalleryDetailView: View {
     @ViewBuilder private var content: some View {
         let rows = rows
         if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
-            PhotoViewer(rows: rows, index: index, loader: loader, browser: browser, sorter: sorter, availability: availability)
+            PhotoViewer(
+                rows: rows, index: index, loader: loader, browser: browser, sorter: sorter, availability: availability,
+                cellAspectRatio: cellAspectRatio
+            )
         } else if rows.isEmpty, !photos.isEmpty, browser.filter != .all {
             EmptyFilterView(filter: browser.filter) { selectFilter(.all) }
         } else {
@@ -339,13 +405,18 @@ struct GalleryDetailView: View {
                 GalleryGridView(
                     rows: rows, loader: loader, browser: browser, sorter: sorter,
                     canUseOriginals: availability.canUseOriginals,
-                    cellAspectRatio: ThumbnailShape.cellAspectRatio(sizes: photos.map { ($0.pixelWidth, $0.pixelHeight) }),
+                    cellAspectRatio: cellAspectRatio,
                     minimumCellWidth: thumbnailWidth
                 )
             case .table:
                 GalleryTableView(rows: rows, browser: browser, sorter: sorter)
             }
         }
+    }
+
+    /// Width / height of the thumbnails, the dominant shape of the gallery (`ThumbnailShape`).
+    private var cellAspectRatio: CGFloat {
+        ThumbnailShape.cellAspectRatio(sizes: photos.map { ($0.pixelWidth, $0.pixelHeight) })
     }
 
     /// The browser's entries with their photos. Right after a save, `photos` can be newer than the
