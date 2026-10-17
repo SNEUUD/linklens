@@ -7,13 +7,25 @@
     "· Z ou Échap pour revenir" : {
 
     },
+    "« %@ » est de retour" : {
+
+    },
     "« %@ » est sur une carte d'appareil photo. Pour garder vos photos après avoir formaté la carte, importez-la : glissez la carte elle-même, ou choisissez « Importer une carte SD… » (⇧⌘I)." : {
+
+    },
+    "« %@ » est un disque entier : LinkLens ne le met jamais à la corbeille." : {
+
+    },
+    "« %@ » est un dossier important de votre Mac : LinkLens ne le met jamais à la corbeille." : {
 
     },
     "« %@ » n'est pas un dossier. LinkLens ajoute des dossiers entiers : glissez le dossier qui contient vos photos, ou choisissez « Ajouter un dossier… » (⌘O)." : {
 
     },
     "« %@ » ne contient pas de dossier DCIM : ce n'est pas une carte d'appareil photo. Choisissez la carte elle-même." : {
+
+    },
+    "« %@ » supprimée de LinkLens" : {
 
     },
     "%@ : meilleure photo de la rafale, votre choix" : {
@@ -76,6 +88,16 @@
     },
     "%@ est un peu meilleure. Gardez celle-ci si vous la préférez." : {
 
+    },
+    "%@ et %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ et %2$@"
+          }
+        }
+      }
     },
     "%@ seront libérés quand vous viderez la corbeille. Les copies gardées ne sont pas modifiées, et vous pourrez annuler." : {
 
@@ -170,6 +192,9 @@
         }
       }
     },
+    "^[%lld fichier](inflect: true)" : {
+
+    },
     "^[%lld fichier](inflect: true) copiés et vérifiés" : {
 
     },
@@ -261,6 +286,9 @@
     "Annuler la mise à la corbeille" : {
 
     },
+    "Annuler la suppression de « %@ »" : {
+
+    },
     "Annuler supprime les copies déjà faites. La carte n'est jamais modifiée." : {
 
     },
@@ -301,6 +329,9 @@
     "Arrêter. L'inspecteur montrera moins de détails pour les photos pas encore lues ; reprise au prochain lancement." : {
 
     },
+    "Attendez la fin de l'indexation, du tri ou de l'export de cette galerie pour la supprimer." : {
+
+    },
     "au centre" : {
 
     },
@@ -320,6 +351,9 @@
 
     },
     "Aucun fichier n'existe en plusieurs exemplaires dans vos galeries." : {
+
+    },
+    "Aucune photo" : {
 
     },
     "Aucune photo « %@ »" : {
@@ -369,6 +403,12 @@
 
     },
     "Carte SD…" : {
+
+    },
+    "Ce dossier contient aussi la galerie « %@ » : il l'emporterait avec lui. Supprimez seulement la galerie, ou rangez les dossiers autrement dans le Finder." : {
+
+    },
+    "Ce dossier fait partie du dossier de la galerie « %@ » : le mettre à la corbeille lui retirerait des photos." : {
 
     },
     "Ce fichier a changé depuis la recherche." : {
@@ -422,6 +462,9 @@
     "Choisissez la carte de l'appareil photo (le disque qui contient le dossier DCIM). Rien ne sera modifié sur la carte." : {
 
     },
+    "choisissez le dossier « %@ » lui-même dans la fenêtre « Autoriser »" : {
+
+    },
     "Choisissez le dossier « %@ » lui-même pour autoriser LinkLens à y faire le tri." : {
 
     },
@@ -435,6 +478,9 @@
 
     },
     "Choisissez une photo pour voir pourquoi l'IA l'a classée ainsi." : {
+
+    },
+    "Commande Z pour annuler." : {
 
     },
     "comme l'IA" : {
@@ -885,13 +931,40 @@
     "Le bord gauche de la photo coupe le sujet." : {
 
     },
+    "Le disque « %@ » n'est pas branché. Branchez-le pour mettre aussi le dossier à la corbeille, ou supprimez seulement la galerie." : {
+
+    },
     "Le dossier « %@ » n'est plus disponible. Choisissez-en un autre." : {
+
+    },
+    "Le dossier a changé de place depuis l'ouverture de cette fenêtre : il restera où il est. Fermez la fenêtre et recommencez." : {
 
     },
     "Le dossier a peut-être été déplacé, renommé ou supprimé. Les miniatures et le tri restent consultables." : {
 
     },
+    "Le dossier est dans la corbeille." : {
+
+    },
+    "Le dossier est introuvable : il a peut-être été déplacé, renommé ou déjà mis à la corbeille." : {
+
+    },
+    "Le dossier est resté à sa place." : {
+
+    },
+    "Le dossier est resté dans la corbeille (%@). Remettez-le depuis le Finder : Corbeille, clic droit, « Remettre »." : {
+
+    },
+    "Le dossier ira dans la corbeille du Finder, d'où il peut être remis." : {
+
+    },
+    "Le dossier n'a pas pu être mis à la corbeille (%@). Rien n'a été supprimé." : {
+
+    },
     "Le dossier n'est pas accessible." : {
+
+    },
+    "Le dossier n'est plus dans la corbeille : la galerie est revenue sans lui." : {
 
     },
     "Le fichier n'a pas pu être lu. Vérifiez-la vous-même." : {
@@ -939,6 +1012,9 @@
     "Lecture des détails des photos" : {
 
     },
+    "Lecture du dossier…" : {
+
+    },
     "Lecture impossible sur la carte : %@" : {
 
     },
@@ -949,6 +1025,9 @@
 
     },
     "Légèrement floue (netteté du sujet %@ < %@)" : {
+
+    },
+    "Les choix de tri de cette galerie seront perdus : Garder, À revoir, Rejeter et les meilleures photos des rafales. Les fichiers ne sont pas touchés, sauf si vous cochez la case ci-dessous." : {
 
     },
     "Les fichiers originaux ne sont pas accessibles : LinkLens montre la plus grande image gardée en cache." : {
@@ -993,6 +1072,9 @@
     "LinkLens n'a pas l'autorisation de modifier ce dossier." : {
 
     },
+    "LinkLens n'arrive pas à lire le contenu de ce dossier : il restera à sa place." : {
+
+    },
     "Liste" : {
 
     },
@@ -1003,6 +1085,9 @@
 
     },
     "Masquer" : {
+
+    },
+    "Masquer ce message" : {
 
     },
     "Masquer jusqu'à la prochaine insertion de la carte" : {
@@ -1042,6 +1127,9 @@
 
     },
     "Mettre à la corbeille" : {
+
+    },
+    "Mettre aussi le dossier à la corbeille" : {
 
     },
     "Mis à la corbeille, mais LinkLens ne pourra pas l'en sortir." : {
@@ -1202,6 +1290,9 @@
     "Pour mettre des copies en double à la corbeille, LinkLens a besoin de votre accord pour modifier le dossier « %@ ». Seules les copies que vous avez confirmées seront déplacées." : {
 
     },
+    "Pour mettre le dossier « %@ » à la corbeille, LinkLens a besoin de votre accord. Seul ce dossier sera déplacé, et vous pourrez l'en sortir." : {
+
+    },
     "Pourquoi ce choix" : {
 
     },
@@ -1340,6 +1431,9 @@
     "Rejeter" : {
 
     },
+    "Remettre la galerie (⌘Z)" : {
+
+    },
     "Replier la rafale" : {
 
     },
@@ -1347,6 +1441,9 @@
 
     },
     "Replier la rafale %lld" : {
+
+    },
+    "Retirer cette galerie de LinkLens. Vous pourrez annuler." : {
 
     },
     "Revenir à l'IA" : {
@@ -1362,6 +1459,9 @@
 
     },
     "Revenir aux photos (Espace ou Échap)" : {
+
+    },
+    "Rien n'a été supprimé. %@" : {
 
     },
     "Sans aucune perte, pour la retouche. Fichiers très lourds." : {
@@ -1473,6 +1573,36 @@
     "sujet un peu flou" : {
 
     },
+    "Suppression de « %@ »" : {
+
+    },
+    "Suppression de galerie" : {
+
+    },
+    "Suppression de la galerie" : {
+
+    },
+    "Suppression en cours" : {
+
+    },
+    "Supprimer" : {
+
+    },
+    "Supprimer « %@ » de LinkLens ?" : {
+
+    },
+    "Supprimer la galerie" : {
+
+    },
+    "Supprimer la galerie « %@ »…" : {
+
+    },
+    "Supprimer la galerie et mettre le dossier à la corbeille" : {
+
+    },
+    "Supprimer la galerie…" : {
+
+    },
     "sur le sujet" : {
 
     },
@@ -1557,6 +1687,9 @@
     "triez-la avec P, U ou X." : {
 
     },
+    "Un autre élément porte déjà le nom du dossier à son ancienne place. Le dossier est resté dans la corbeille : remettez-le vous-même depuis le Finder." : {
+
+    },
     "Un autre fichier porte déjà ce nom à cet endroit." : {
 
     },
@@ -1612,6 +1745,12 @@
 
     },
     "Votre choix, le même que l'IA" : {
+
+    },
+    "Vous pourrez annuler pendant 10 minutes (⌘Z)." : {
+
+    },
+    "Vous pourrez annuler pendant 10 minutes (⌘Z). Après, le dossier pourra encore être remis depuis la corbeille du Finder." : {
 
     },
     "Vous pouvez formater la carte." : {
