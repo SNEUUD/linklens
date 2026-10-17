@@ -11,7 +11,10 @@ struct ContentView: View {
     @Environment(CardMonitor.self) private var cardMonitor
     @Environment(DuplicatesController.self) private var duplicatesController
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
+    @Environment(GalleryDeletionController.self) private var deletionController
     @Environment(\.thumbnailCache) private var thumbnailCache
+    /// The window's undo manager: ⌘Z puts a deleted gallery back.
+    @Environment(\.undoManager) private var undoManager
     @Query(sort: \Gallery.createdAt, order: .reverse) private var galleries: [Gallery]
     @State private var isDuplicatesSheetPresented = false
     /// Sidebar shown or not. The full-window viewer hides it and puts it back as it was when it closes.
@@ -47,7 +50,9 @@ struct ContentView: View {
                     }
                 },
                 onDismissCard: cardMonitor.dismiss,
-                onShowDuplicates: { isDuplicatesSheetPresented = true }
+                onShowDuplicates: { isDuplicatesSheetPresented = true },
+                onDeleteGallery: requestDeletion,
+                canDeleteGallery: canDelete
             )
             // No sidebar button while the viewer takes the whole window: « ‹ Grille » brings it back.
             .toolbar(removing: visibilityBeforeViewer == nil ? nil : .sidebarToggle)
@@ -58,8 +63,12 @@ struct ContentView: View {
             // `Group` wraps the branches so one modifier (the alert) applies to all of them.
             Group {
                 if let gallery = galleries.first(where: { $0.id == importController.selectedGalleryId }) {
-                    GalleryDetailView(gallery: gallery, thumbnailCache: thumbnailCache, onViewerChange: viewerChanged)
-                        .id(gallery.id)
+                    GalleryDetailView(
+                        gallery: gallery, thumbnailCache: thumbnailCache, onViewerChange: viewerChanged,
+                        onDelete: canDelete(gallery.id) ? { requestDeletion(gallery) } : nil,
+                        deleteHelp: deleteHelp(gallery.id)
+                    )
+                    .id(gallery.id)
                 } else if galleries.isEmpty {
                     WelcomeView(isDropTargeted: isDropTargeted)
                 } else {
@@ -67,6 +76,21 @@ struct ContentView: View {
                         .toolbar { ImportToolbarMenu() }
                 }
             }
+            // Over the bottom of the photos, above the progress pill's place (both can show at once):
+            // « « Séance » supprimée de LinkLens · Annuler ». At the top it would hide the filters.
+            .overlay(alignment: .bottom) {
+                if let banner = deletionController.banner {
+                    GalleryDeletionBannerView(
+                        banner: banner,
+                        onUndo: { deletionController.undo(galleryId: banner.galleryId) },
+                        onClose: deletionController.hideBanner
+                    )
+                    .padding(.bottom, ActivityPillView.reservedHeight + 26)
+                    .padding(.horizontal, 20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: deletionController.banner)
             .alert(
                 "Tri impossible",
                 isPresented: Binding(
@@ -113,6 +137,26 @@ struct ContentView: View {
             CardImportSheet()
                 .environment(cardImportController)
                 .environment(\.thumbnailCache, thumbnailCache)
+        }
+        // The deletion window. Closing it any other way than « Supprimer » changes nothing.
+        .sheet(isPresented: Binding(
+            get: { deletionController.request != nil },
+            set: { if !$0 { deletionController.cancel() } }
+        )) {
+            GalleryDeletionSheet()
+                .environment(deletionController)
+        }
+        // Errors after the window closed (an undo that could not finish); inside it, they show in the window.
+        .alert(
+            "Suppression de la galerie",
+            isPresented: Binding(
+                get: { deletionController.request == nil && deletionController.errorMessage != nil },
+                set: { if !$0 { deletionController.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(deletionController.errorMessage ?? "")
         }
         .alert(
             "Import impossible",
@@ -164,6 +208,22 @@ struct ContentView: View {
         }
     }
 
+    /// « Supprimer la galerie… » (right-click in the sidebar, « Galerie » menu, ⌘⌫): the confirmation window.
+    private func requestDeletion(_ gallery: Gallery) {
+        deletionController.requestDeletion(GalleryDeletionRequest(gallery), undoManager: undoManager)
+    }
+
+    /// Not while another window (sheet) is open over this one, nor while the gallery is busy.
+    private func canDelete(_ galleryId: UUID) -> Bool {
+        !isDuplicatesSheetPresented && !cardImportController.isSheetPresented && deletionController.canDelete(galleryId: galleryId)
+    }
+
+    private func deleteHelp(_ galleryId: UUID) -> String {
+        deletionController.isBusy(galleryId)
+            ? String(localized: "Attendez la fin de l'indexation, du tri ou de l'export de cette galerie pour la supprimer.")
+            : String(localized: "Retirer cette galerie de LinkLens. Vous pourrez annuler.")
+    }
+
     /// The viewer takes the whole window (as in the mockup): the sidebar folds away while it is open.
     private func viewerChanged(_ isOpen: Bool) {
         // Not animated: an animated sidebar while the toolbar changes made AppKit loop over its
@@ -193,6 +253,7 @@ struct ContentView: View {
         .environment(DuplicatesController(store: store))
         .environment(GalleryAvailabilityMonitor(store: store))
         .environment(DetailsBackfillController(store: store))
+        .environment(GalleryDeletionController(store: store))
         .modelContainer(container)
 }
 

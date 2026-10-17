@@ -22,6 +22,9 @@ struct LibrarySidebar: View {
     var onImportCard: (DetectedCard) -> Void = { _ in }
     var onDismissCard: (DetectedCard) -> Void = { _ in }
     var onShowDuplicates: () -> Void = {}
+    /// « Supprimer la galerie… » in a row's right-click menu, and whether it is possible now.
+    var onDeleteGallery: (Gallery) -> Void = { _ in }
+    var canDeleteGallery: (UUID) -> Bool = { _ in false }
 
     var body: some View {
         List(selection: $selection) {
@@ -34,6 +37,14 @@ struct LibrarySidebar: View {
                         onCancelIndexing: onCancelIndexing
                     )
                     .tag(gallery.id)
+                    // The right-click menu of the row (like `onContextMenu` in React, but drawn by macOS).
+                    .contextMenu {
+                        Button("Supprimer la galerie…", systemImage: "trash", role: .destructive) {
+                            onDeleteGallery(gallery)
+                        }
+                        .disabled(!canDeleteGallery(gallery.id))
+                        .accessibilityLabel(Text("Supprimer la galerie « \(gallery.name) »…"))
+                    }
                 }
                 if galleries.isEmpty {
                     // First launch: where the sessions will go. The welcome screen next to it has the

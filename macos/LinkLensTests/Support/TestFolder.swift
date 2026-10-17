@@ -17,6 +17,11 @@ struct TestFolder {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
+    /// A folder that already exists (made by the code under test), to read with `snapshot()`.
+    init(existing url: URL) {
+        self.url = url
+    }
+
     func remove() {
         try? FileManager.default.removeItem(at: url)
     }

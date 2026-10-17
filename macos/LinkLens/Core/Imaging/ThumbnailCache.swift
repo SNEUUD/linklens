@@ -34,6 +34,14 @@ struct ThumbnailCache: Sendable {
         try ThumbnailGenerator.jpegData(from: image).write(to: fileURL(for: photoId), options: .atomic)
     }
 
+    /// Removes the thumbnails of photos that left the catalogue for good (a deleted gallery, once
+    /// « Annuler » is no longer possible). Missing files are skipped.
+    func remove(_ photoIds: [UUID]) {
+        for photoId in photoIds {
+            try? FileManager.default.removeItem(at: fileURL(for: photoId))
+        }
+    }
+
     /// Ids among `photoIds` that have no thumbnail yet, in the same order.
     func missing(among photoIds: [UUID]) -> [UUID] {
         let existing = Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])

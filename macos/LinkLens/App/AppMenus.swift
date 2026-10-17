@@ -13,6 +13,9 @@ struct GalleryMenuActions: Sendable {
     var exportHelp: String
     var reveal: (@MainActor () -> Void)?
     var revealHelp: String
+    /// « Supprimer la galerie… » (⌘⌫): opens the confirmation window. Nil while it cannot be deleted.
+    var delete: (@MainActor () -> Void)? = nil
+    var deleteHelp = ""
 }
 
 /// What the « Présentation » menu can do for the gallery in the front window: the verdict filters
@@ -41,7 +44,8 @@ struct MenuAction: Sendable {
     let perform: @MainActor () -> Void
 }
 
-/// The « Galerie » menu of the menu bar: Trier à nouveau, Exporter…, Afficher dans le Finder, Doublons….
+/// The « Galerie » menu of the menu bar: Trier à nouveau, Exporter…, Afficher dans le Finder, Doublons…,
+/// Supprimer la galerie….
 struct GalleryMenuCommands: View {
     @FocusedValue(\.galleryMenuActions) private var actions
     @FocusedValue(\.showDuplicates) private var showDuplicates
@@ -61,6 +65,12 @@ struct GalleryMenuCommands: View {
         Button("Doublons…") { showDuplicates?.perform() }
             .disabled(showDuplicates == nil)
             .help("Rechercher les fichiers identiques dans toutes vos galeries")
+        Divider()
+        // ⌘⌫ (`.delete` is the ⌫ key). Always through the confirmation window: nothing is deleted at once.
+        Button("Supprimer la galerie…") { actions?.delete?() }
+            .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(actions?.delete == nil)
+            .help(actions?.deleteHelp ?? "")
     }
 }
 

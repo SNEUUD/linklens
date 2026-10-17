@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -8,12 +9,13 @@ struct LinkLensApp: App {
     private let container: ModelContainer
     @State private var importController: ImportController
     @State private var cullingController: CullingController
-    @State private var exportController = ExportController()
+    @State private var exportController: ExportController
     @State private var cardImportController: CardImportController
     @State private var cardMonitor: CardMonitor
     @State private var duplicatesController: DuplicatesController
     @State private var availabilityMonitor: GalleryAvailabilityMonitor
     @State private var detailsController: DetailsBackfillController
+    @State private var deletionController: GalleryDeletionController
 
     init() {
         do {
@@ -29,11 +31,12 @@ struct LinkLensApp: App {
         }
         _importController = State(initialValue: folderImport)
         // `_name = State(initialValue:)` sets a `@State` property from `init`, before the view exists.
-        _cardImportController = State(initialValue: CardImportController(importer: CardImporter(store: store)) { galleryId, sortNow in
+        let cardImport = CardImportController(importer: CardImporter(store: store)) { galleryId, sortNow in
             folderImport.selectedGalleryId = galleryId
             // Not sorted now: it will be at the next launch, or with « Trier » in the toolbar.
             if sortNow { culling.cull(galleryId: galleryId) }
-        })
+        }
+        _cardImportController = State(initialValue: cardImport)
         // F9: which galleries have their disk plugged in. When a disk comes back, the galleries that
         // could not be sorted while it was away are sorted now (only those never sorted).
         let availability = GalleryAvailabilityMonitor(store: store)
@@ -52,6 +55,24 @@ struct LinkLensApp: App {
         let duplicates = DuplicatesController(store: store)
         duplicates.galleryAvailability = { availability.availability(of: $0) }
         _duplicatesController = State(initialValue: duplicates)
+        let export = ExportController()
+        _exportController = State(initialValue: export)
+        // Deleting a gallery: not while something reads or writes it, nor during the duplicate search
+        // (which goes through every gallery). The import location is never put in the trash.
+        let deletion = GalleryDeletionController(store: store)
+        deletion.galleryAvailability = { availability.availability(of: $0) }
+        deletion.isBusy = { galleryId in
+            folderImport.progress?.galleryId == galleryId || culling.isBusy(galleryId: galleryId)
+                || details.runningGalleryId == galleryId || export.progress?.galleryId == galleryId
+                || duplicates.isScanning || duplicates.isMovingFiles
+        }
+        deletion.protectedPaths = {
+            let destination = cardImport.defaultDestination.map { FolderBookmark.canonicalPath(of: $0.url) }
+            return FolderTrashRules.protectedPaths(home: realHomeDirectory(), extra: destination.map { [$0] } ?? [])
+        }
+        deletion.selectedGalleryId = { folderImport.selectedGalleryId }
+        deletion.selectGallery = { folderImport.selectedGalleryId = $0 }
+        _deletionController = State(initialValue: deletion)
         let monitor = CardMonitor()
         _cardMonitor = State(initialValue: monitor)
         // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch, and
@@ -62,6 +83,13 @@ struct LinkLensApp: App {
             details.fillPendingGalleries()
             monitor.start()
             availability.start()
+            // Thumbnails of galleries deleted before the last quit (or a crash): no undo is possible now.
+            Task { await deletion.purgeLeftovers() }
+            // When the app quits, every undo ends: the thumbnails of deleted galleries go.
+            NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+                // The notification comes on the main thread (`queue: .main`): `assumeIsolated` tells Swift so.
+                MainActor.assumeIsolated { deletion.finishAllNow() }
+            }
         }
     }
 
@@ -76,6 +104,7 @@ struct LinkLensApp: App {
                 .environment(duplicatesController)
                 .environment(availabilityMonitor)
                 .environment(detailsController)
+                .environment(deletionController)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)

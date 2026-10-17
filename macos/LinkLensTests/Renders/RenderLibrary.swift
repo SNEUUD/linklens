@@ -23,6 +23,8 @@ final class RenderLibrary {
     let exportController = ExportController()
     let availabilityMonitor: GalleryAvailabilityMonitor
     let detailsController: DetailsBackfillController
+    /// Its own thumbnail cache and purge file: never the app's.
+    let deletionController: GalleryDeletionController
 
     init() throws {
         container = try ModelContainer(
@@ -34,6 +36,10 @@ final class RenderLibrary {
         detailsController = DetailsBackfillController(store: store)
         cache = ThumbnailCache(directory: FileManager.default.temporaryDirectory
             .appending(path: "LinkLensRenderThumbnails-\(UUID().uuidString)", directoryHint: .isDirectory))
+        deletionController = GalleryDeletionController(
+            store: store, cache: cache,
+            purgeQueue: ThumbnailPurgeQueue(fileURL: cache.directory.appending(path: "PendingThumbnailRemovals.json"))
+        )
         let context = container.mainContext
         let start = Date(timeIntervalSince1970: 1_789_908_057) // 20 Sept. 2026, 14:40:57 in Paris (12:40:57 UTC)
 
@@ -130,6 +136,7 @@ final class RenderLibrary {
             .environment(DuplicatesController(store: store))
             .environment(availabilityMonitor)
             .environment(detailsController)
+            .environment(deletionController)
             .environment(\.thumbnailCache, cache)
             .modelContainer(container)
     }

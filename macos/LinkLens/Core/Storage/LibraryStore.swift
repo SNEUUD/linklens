@@ -50,6 +50,40 @@ actor LibraryStore {
         try modelContext.save()
     }
 
+    // MARK: - Deleting a gallery (with undo)
+
+    /// Removes the gallery, its photos and the user's choices from the catalogue, and returns all it
+    /// takes to put them back. The files on disk are not touched here.
+    func removeGallery(id: UUID) throws -> GallerySnapshot {
+        let gallery = try fetchGallery(id: id)
+        let snapshot = gallery.snapshot
+        // `.cascade` on `Gallery.photos`: the photos go with their gallery.
+        modelContext.delete(gallery)
+        try modelContext.save()
+        return snapshot
+    }
+
+    /// "Annuler": puts a removed gallery back, unchanged. Does nothing if it is already there.
+    func restoreGallery(_ snapshot: GallerySnapshot) throws {
+        let id = snapshot.id
+        var descriptor = FetchDescriptor<Gallery>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard try modelContext.fetch(descriptor).isEmpty else { return }
+        let gallery = Gallery(snapshot: snapshot)
+        modelContext.insert(gallery)
+        for photoSnapshot in snapshot.photos {
+            let photo = Photo(snapshot: photoSnapshot)
+            modelContext.insert(photo)
+            photo.gallery = gallery
+        }
+        try modelContext.save()
+    }
+
+    /// The ids among `photoIds` of photos in the catalogue: their thumbnails must stay in the cache.
+    func existingPhotoIds(among photoIds: [UUID]) throws -> Set<UUID> {
+        Set(try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { photoIds.contains($0.id) })).map(\.id))
+    }
+
     /// Galleries left half-indexed (app quit during indexing) are removed at launch.
     func deleteUnfinishedGalleries() throws -> Int {
         let unfinished = try modelContext.fetch(FetchDescriptor<Gallery>(predicate: #Predicate { $0.indexedAt == nil }))

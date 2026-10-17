@@ -56,19 +56,27 @@ struct GalleryDetailView: View {
     private let filterStore: VerdictFilterStore
     /// Told when the viewer opens or closes: the window then hides or shows its sidebar.
     private let onViewerChange: (Bool) -> Void
+    /// Opens the deletion window; nil while the gallery cannot be deleted (with `deleteHelp` saying why).
+    private let onDelete: (() -> Void)?
+    private let deleteHelp: String
 
     /// - Parameters:
     ///   - thumbnailCache: the app's cache; the interface renders pass one of their own.
     ///   - onViewerChange: called with true when the full-window viewer opens, false when it closes.
+    ///   - onDelete: « Supprimer la galerie… » of the « Galerie » menu (⌘⌫), nil when disabled.
     init(
         gallery: Gallery,
         thumbnailCache: ThumbnailCache = .standard,
         filterStore: VerdictFilterStore = VerdictFilterStore(),
-        onViewerChange: @escaping (Bool) -> Void = { _ in }
+        onViewerChange: @escaping (Bool) -> Void = { _ in },
+        onDelete: (() -> Void)? = nil,
+        deleteHelp: String = ""
     ) {
         self.gallery = gallery
         self.filterStore = filterStore
         self.onViewerChange = onViewerChange
+        self.onDelete = onDelete
+        self.deleteHelp = deleteHelp
         _loader = State(initialValue: ThumbnailLoader(cache: thumbnailCache))
         let browser = GalleryBrowser()
         // The filter chosen last time in this gallery.
@@ -288,6 +296,10 @@ struct GalleryDetailView: View {
         if canCull { cull = { cullingController.cull(galleryId: galleryId) } }
         if canExport { export = { isExportSheetPresented = true } }
         if availability.canUseOriginals { reveal = { revealInFinder() } }
+        // Not over the full-window viewer (where ⌘⌫ could be taken for « delete this photo »), nor
+        // while the export window is open.
+        var delete: (@MainActor () -> Void)?
+        if let onDelete, !browser.isViewerOpen, !isExportSheetPresented { delete = { onDelete() } }
         let defaultCullHelp = String(localized: "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
         let defaultExportHelp = String(localized: "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés.")
         let defaultRevealHelp = String(localized: "Afficher le dossier de la galerie dans le Finder")
@@ -298,7 +310,9 @@ struct GalleryDetailView: View {
             export: export,
             exportHelp: availability.help(for: .export) ?? defaultExportHelp,
             reveal: reveal,
-            revealHelp: availability.help(for: .reveal) ?? defaultRevealHelp
+            revealHelp: availability.help(for: .reveal) ?? defaultRevealHelp,
+            delete: delete,
+            deleteHelp: deleteHelp
         )
     }
 
