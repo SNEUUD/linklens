@@ -1,6 +1,18 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "" : {
+
+    },
+    "· Z ou Échap pour revenir" : {
+
+    },
+    "« %@ » est sur une carte d'appareil photo. Pour garder vos photos après avoir formaté la carte, importez-la : glissez la carte elle-même, ou choisissez « Importer une carte SD… » (⇧⌘I)." : {
+
+    },
+    "« %@ » n'est pas un dossier. LinkLens ajoute des dossiers entiers : glissez le dossier qui contient vos photos, ou choisissez « Ajouter un dossier… » (⌘O)." : {
+
+    },
     "« %@ » ne contient pas de dossier DCIM : ce n'est pas une carte d'appareil photo. Choisissez la carte elle-même." : {
 
     },
@@ -9,6 +21,26 @@
     },
     "%@ : meilleure photo selon l'IA" : {
 
+    },
+    "%@ · photo %lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · photo %2$lld sur %3$lld"
+          }
+        }
+      }
+    },
+    "%@ · rafale de %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · rafale de %2$lld"
+          }
+        }
+      }
     },
     "%@ (%@)" : {
       "localizations" : {
@@ -20,15 +52,53 @@
         }
       }
     },
-    "%@ seront libérés quand vous viderez la corbeille. Les copies gardées ne sont pas modifiées, et vous pourrez annuler." : {
-
-    },
-    "%@ sur %@%@" : {
+    "%@ (⌘%@)" : {
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$@ sur %2$@%3$@"
+            "value" : "%1$@ (⌘%2$@)"
+          }
+        }
+      }
+    },
+    "%@ à 100 %%" : {
+
+    },
+    "%@ de la photo est blanche, sans aucun détail." : {
+
+    },
+    "%@ de la photo est blanche, sans détail : souvent le ciel ou un reflet." : {
+
+    },
+    "%@ de la photo est noire, sans détail." : {
+
+    },
+    "%@ est un peu meilleure. Gardez celle-ci si vous la préférez." : {
+
+    },
+    "%@ seront libérés quand vous viderez la corbeille. Les copies gardées ne sont pas modifiées, et vous pourrez annuler." : {
+
+    },
+    "%@, ^[%lld photo](inflect: true)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, ^[%2$lld photo](inflect: true)"
+          }
+        }
+      }
+    },
+    "%@, l'IA n'a rien proposé." : {
+
+    },
+    "%@, touche %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, touche %2$@"
           }
         }
       }
@@ -49,6 +119,47 @@
     "%lld · %lld photos" : {
 
     },
+    "%lld à garder" : {
+
+    },
+    "%lld à rejeter" : {
+
+    },
+    "%lld à revoir" : {
+
+    },
+    "%lld pas encore triées" : {
+
+    },
+    "%lld personnes ont les yeux fermés." : {
+
+    },
+    "%lld photos prises dans la même seconde." : {
+
+    },
+    "%lld photos prises en %lld secondes." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld photos prises en %2$lld secondes."
+          }
+        }
+      }
+    },
+    "%lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld sur %2$lld"
+          }
+        }
+      }
+    },
+    "^[%lld autre tâche](inflect: true) en cours" : {
+
+    },
     "^[%lld copie](inflect: true) identique · %@ chacune" : {
       "localizations" : {
         "fr" : {
@@ -59,11 +170,18 @@
         }
       }
     },
-    "^[%lld fichier](inflect: true) copiés et vérifiés : chaque copie est identique à l'original (empreinte SHA-256)." : {
+    "^[%lld fichier](inflect: true) copiés et vérifiés" : {
 
     },
-    "^[%lld fichier](inflect: true) copiés et vérifiés." : {
-
+    "^[%lld fichier](inflect: true) copiés et vérifiés depuis la carte « %@ »" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld fichier](inflect: true) copiés et vérifiés depuis la carte « %2$@ »"
+          }
+        }
+      }
     },
     "^[%lld fichier](inflect: true) en plusieurs exemplaires" : {
 
@@ -77,20 +195,22 @@
     "^[%lld photo](inflect: true)" : {
 
     },
-    "^[%lld photo](inflect: true) · ^[%lld vidéo](inflect: true)" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "^[%1$lld photo](inflect: true) · ^[%2$lld vidéo](inflect: true)"
-          }
-        }
-      }
+    "^[%lld rafale](inflect: true)" : {
+
     },
     "^[%lld vidéo](inflect: true)" : {
 
     },
     "2048 pixels de côté, sRGB, qualité 80 %, sans position GPS" : {
+
+    },
+    "à droite" : {
+
+    },
+    "à gauche" : {
+
+    },
+    "à mi-hauteur" : {
 
     },
     "À revoir" : {
@@ -102,16 +222,37 @@
     "Afficher dans le Finder" : {
 
     },
+    "Afficher l'inspecteur" : {
+
+    },
+    "Afficher l'inspecteur (⌥⌘I)" : {
+
+    },
     "Afficher le dossier de la galerie dans le Finder" : {
 
     },
-    "Afficher les photos en grille ou en tableau" : {
+    "Afficher les photos en grille ou en liste" : {
+
+    },
+    "Afficher toutes les photos (⌘1)" : {
+
+    },
+    "Agrandir les vignettes" : {
 
     },
     "Ajouter un dossier…" : {
 
     },
+    "Ajouter une galerie…" : {
+
+    },
+    "Analyse impossible" : {
+
+    },
     "Analyse impossible : à vérifier vous-même" : {
+
+    },
+    "analyse impossible, à vérifier vous-même" : {
 
     },
     "Annuler" : {
@@ -123,7 +264,47 @@
     "Annuler supprime les copies déjà faites. La carte n'est jamais modifiée." : {
 
     },
+    "Aperçu de la carte : %lld photos montrées sur %lld fichiers" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aperçu de la carte : %1$lld photos montrées sur %2$lld fichiers"
+          }
+        }
+      }
+    },
+    "Aperçu de la photo" : {
+
+    },
     "Aperçu réduit : %@" : {
+
+    },
+    "Appareil" : {
+
+    },
+    "Après : %@" : {
+
+    },
+    "Arrêter" : {
+
+    },
+    "Arrêter l'export. Les photos déjà exportées sont gardées." : {
+
+    },
+    "Arrêter l'indexation. Les fichiers ne sont pas touchés." : {
+
+    },
+    "Arrêter le tri. Les verdicts précédents sont gardés." : {
+
+    },
+    "Arrêter. L'inspecteur montrera moins de détails pour les photos pas encore lues ; reprise au prochain lancement." : {
+
+    },
+    "au centre" : {
+
+    },
+    "aucun défaut détecté" : {
 
     },
     "Aucun défaut détecté" : {
@@ -135,10 +316,13 @@
     "Aucun emplacement choisi" : {
 
     },
+    "Aucun fichier copié" : {
+
+    },
     "Aucun fichier n'existe en plusieurs exemplaires dans vos galeries." : {
 
     },
-    "Aucune galerie" : {
+    "Aucune photo « %@ »" : {
 
     },
     "Aucune photo JPEG, HEIC ou RAW Sony (.ARW) dans le dossier « %@ »." : {
@@ -147,7 +331,32 @@
     "Aucune photo ni vidéo sur la carte « %@ »." : {
 
     },
+    "Aucune photo sélectionnée" : {
+
+    },
     "Autoriser" : {
+
+    },
+    "Autres tâches en cours" : {
+
+    },
+    "Avant : %@" : {
+
+    },
+    "Bienvenue dans LinkLens" : {
+
+    },
+    "Blanc sans détail : %@ de la photo · noir sans détail : %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Blanc sans détail : %1$@ de la photo · noir sans détail : %2$@"
+          }
+        }
+      }
+    },
+    "carte" : {
 
     },
     "Carte détectée" : {
@@ -156,16 +365,37 @@
     "Carte détectée : %@" : {
 
     },
+    "Carte SD" : {
+
+    },
+    "Carte SD…" : {
+
+    },
     "Ce fichier a changé depuis la recherche." : {
+
+    },
+    "Celle-ci a le meilleur ensemble netteté et composition." : {
+
+    },
+    "Celle-ci a le sujet le plus net." : {
+
+    },
+    "Celle-ci est la plus nette." : {
 
     },
     "Ces fichiers ne seront pas copiés (format non pris en charge) :" : {
 
     },
+    "Changer l'emplacement…" : {
+
+    },
     "Changer…" : {
 
     },
-    "Chaque rafale est montrée par sa meilleure photo. Touche S : voir toute la rafale ou la replier." : {
+    "Chaque copie est comparée à l'original. LinkLens ne vous propose de formater la carte que si tout est identique. La carte n'est jamais modifiée." : {
+
+    },
+    "Chaque copie est identique à l'original (empreinte SHA-256)." : {
 
     },
     "Choisir" : {
@@ -177,10 +407,16 @@
     "Choisir comme meilleure de la rafale (B)" : {
 
     },
+    "Choisir l'emplacement…" : {
+
+    },
     "Choisir le dossier…" : {
 
     },
     "Choisir…" : {
+
+    },
+    "Choisissez d'abord un emplacement" : {
 
     },
     "Choisissez la carte de l'appareil photo (le disque qui contient le dossier DCIM). Rien ne sera modifié sur la carte." : {
@@ -196,6 +432,12 @@
 
     },
     "Choisissez un dossier de photos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié." : {
+
+    },
+    "Choisissez une photo pour voir pourquoi l'IA l'a classée ainsi." : {
+
+    },
+    "comme l'IA" : {
 
     },
     "Comparaison des fichiers : %lld sur %lld" : {
@@ -227,6 +469,9 @@
     "Copier les photos et vidéos de la carte dans une nouvelle galerie" : {
 
     },
+    "Copier puis vérifier chaque fichier" : {
+
+    },
     "Copies mises à la corbeille : %lld (%@)." : {
       "localizations" : {
         "fr" : {
@@ -243,6 +488,9 @@
     "Corbeille" : {
 
     },
+    "Correcte" : {
+
+    },
     "Création de la galerie : %lld sur %lld" : {
       "localizations" : {
         "fr" : {
@@ -253,10 +501,25 @@
         }
       }
     },
+    "Dans toutes les galeries" : {
+
+    },
+    "Date" : {
+
+    },
     "Date de la séance" : {
 
     },
+    "Date inconnue" : {
+
+    },
     "Décocher pour laisser toutes les copies de ce fichier en place" : {
+
+    },
+    "Déposez le dossier pour l'ajouter" : {
+
+    },
+    "Déposez un dossier" : {
 
     },
     "Dimensions" : {
@@ -265,7 +528,20 @@
     "Disque « %@ » non connecté" : {
 
     },
-    "Dossier créé" : {
+    "dossier" : {
+
+    },
+    "Dossier créé : %@, puis %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dossier créé : %1$@, puis %2$@"
+          }
+        }
+      }
+    },
+    "Dossier d'une carte SD" : {
 
     },
     "Dossier inaccessible" : {
@@ -277,21 +553,23 @@
     "Dossier introuvable : %@" : {
 
     },
+    "Dossier…" : {
+
+    },
+    "Double-cliquez ou appuyez sur Z pour voir la photo à 100 %" : {
+
+    },
     "Doublons" : {
+
+    },
+    "Doublons dans toutes les galeries" : {
 
     },
     "Doublons…" : {
 
     },
-    "du %@ au %@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "du %1$@ au %2$@"
-          }
-        }
-      }
+    "Durée" : {
+
     },
     "Échecs : %lld" : {
 
@@ -299,22 +577,81 @@
     "Écriture impossible : %@" : {
 
     },
+    "Elle représente sa rafale dans la grille." : {
+
+    },
+    "Elle ressemble à un document, un reçu ou une capture d'écran." : {
+
+    },
+    "Elle vient d'une version plus récente de LinkLens." : {
+
+    },
     "Emplacement" : {
+
+    },
+    "Emplacement : %@" : {
+
+    },
+    "Emplacement : aucun emplacement choisi" : {
+
+    },
+    "en bas" : {
+
+    },
+    "en cours" : {
+
+    },
+    "en haut" : {
+
+    },
+    "En JPEG pour le web ou l'impression, en HEIC ou en TIFF. Les originaux ne sont jamais modifiés." : {
 
     },
     "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés." : {
 
     },
+    "Entourer le sujet trouvé par l'IA" : {
+
+    },
     "Espace récupérable : %@" : {
 
     },
-    "Export annulé" : {
+    "Étape %lld : " : {
 
     },
-    "Export en %@ : %lld sur %lld" : {
+    "Étapes" : {
 
+    },
+    "Ex. : Mariage Julie & Tom" : {
+
+    },
+    "Export « %@ »" : {
+
+    },
+    "Export annulé : ^[%lld photo](inflect: true) dans « %@ »" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Export annulé : ^[%1$lld photo](inflect: true) dans « %2$@ »"
+          }
+        }
+      }
     },
     "Export impossible" : {
+
+    },
+    "Export terminé : ^[%lld photo](inflect: true) dans « %@ »" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Export terminé : ^[%1$lld photo](inflect: true) dans « %2$@ »"
+          }
+        }
+      }
+    },
+    "Exporter" : {
 
     },
     "Exporter des photos" : {
@@ -324,6 +661,9 @@
 
     },
     "Exporter…" : {
+
+    },
+    "Exposition" : {
 
     },
     "Fermer" : {
@@ -344,6 +684,12 @@
     "Fichiers restés sur la carte (format non pris en charge) :" : {
 
     },
+    "Filtrer par tri" : {
+
+    },
+    "Floue" : {
+
+    },
     "Floue (netteté de l'image %@ < %@)" : {
 
     },
@@ -353,10 +699,16 @@
     "Format" : {
 
     },
+    "Galerie" : {
+
+    },
     "Galerie introuvable." : {
 
     },
     "Galerie la plus ancienne" : {
+
+    },
+    "Galeries" : {
 
     },
     "Galeries hors d'atteinte, non vérifiées : %@" : {
@@ -372,6 +724,12 @@
 
     },
     "Garder cette copie" : {
+
+    },
+    "Glissez un dossier de photos dans cette fenêtre pour en faire une galerie. Les fichiers restent à leur place." : {
+
+    },
+    "Glissez un seul dossier de photos à la fois : chaque dossier devient une galerie." : {
 
     },
     "Grille" : {
@@ -407,16 +765,19 @@
     "Importer" : {
 
     },
+    "Importer ^[%lld fichier](inflect: true)" : {
+
+    },
     "Importer la carte « %@ »" : {
 
     },
-    "Importer une carte…" : {
+    "Importer une carte SD ou ajouter un dossier de photos" : {
+
+    },
+    "Importer une carte SD…" : {
 
     },
     "Importer…" : {
-
-    },
-    "Importez une carte SD ou un dossier de photos pour commencer." : {
 
     },
     "Impossible d'enregistrer le fichier « %@ »." : {
@@ -440,6 +801,9 @@
     "Indexation : %lld sur %lld" : {
 
     },
+    "Indexation du dossier" : {
+
+    },
     "Indexation impossible" : {
 
     },
@@ -449,10 +813,19 @@
     "Indexer un dossier de photos sans le copier" : {
 
     },
+    "Infos" : {
+
+    },
+    "Inspecteur" : {
+
+    },
     "JPEG pour l'impression" : {
 
     },
     "JPEG pour le web" : {
+
+    },
+    "L'analyse n'a trouvé aucun défaut." : {
 
     },
     "L'emplacement « %@ » n'est pas disponible. Choisissez-en un autre." : {
@@ -464,6 +837,12 @@
     "L'export lit les fichiers originaux." : {
 
     },
+    "l'IA proposait %@" : {
+
+    },
+    "L'IA propose %@" : {
+
+    },
     "La copie gardée a changé depuis la recherche : rien n'a été déplacé." : {
 
     },
@@ -473,7 +852,19 @@
     "La copie n'est pas identique à l'original (empreinte différente)." : {
 
     },
+    "La galerie est ouverte et l'IA commence le tri." : {
+
+    },
+    "La meilleure photo de cette rafale est %@." : {
+
+    },
     "La mise à la corbeille déplace les fichiers originaux." : {
+
+    },
+    "La photo manque un peu de netteté. Regardez-la en grand avant de décider." : {
+
+    },
+    "La photo n'est pas nette : l'appareil a bougé, ou la mise au point est ratée." : {
 
     },
     "La photo sélectionnée (%@)" : {
@@ -485,6 +876,15 @@
     "Laissée en place · %@" : {
 
     },
+    "Le bas de la photo coupe le sujet." : {
+
+    },
+    "Le bord droit de la photo coupe le sujet." : {
+
+    },
+    "Le bord gauche de la photo coupe le sujet." : {
+
+    },
     "Le dossier « %@ » n'est plus disponible. Choisissez-en un autre." : {
 
     },
@@ -494,7 +894,37 @@
     "Le dossier n'est pas accessible." : {
 
     },
+    "Le fichier n'a pas pu être lu. Vérifiez-la vous-même." : {
+
+    },
     "Le fichier n'est plus dans la corbeille." : {
+
+    },
+    "Le haut de la photo coupe le sujet." : {
+
+    },
+    "Le sujet est entier et loin des bords." : {
+
+    },
+    "Le sujet manque un peu de netteté. Regardez-la en grand avant de décider." : {
+
+    },
+    "Le sujet n'est pas net : il a bougé, ou la mise au point est ailleurs." : {
+
+    },
+    "Le sujet touche presque le bas : peu de place pour recadrer." : {
+
+    },
+    "Le sujet touche presque le bord droit : peu de place pour recadrer." : {
+
+    },
+    "Le sujet touche presque le bord gauche : peu de place pour recadrer." : {
+
+    },
+    "Le sujet touche presque le haut : peu de place pour recadrer." : {
+
+    },
+    "Le sujet touche presque un bord : peu de place pour recadrer." : {
 
     },
     "Le tri lit les fichiers originaux." : {
@@ -503,7 +933,16 @@
     "Lecture de la carte « %@ »…" : {
 
     },
+    "Lecture de la pleine définition…" : {
+
+    },
+    "Lecture des détails des photos" : {
+
+    },
     "Lecture impossible sur la carte : %@" : {
+
+    },
+    "Légèrement floue" : {
 
     },
     "Légèrement floue (netteté de l'image %@ < %@)" : {
@@ -515,7 +954,7 @@
     "Les fichiers originaux ne sont pas accessibles : LinkLens montre la plus grande image gardée en cache." : {
 
     },
-    "Les fichiers sont copiés puis vérifiés un par un. Rien n'est modifié ni supprimé sur la carte." : {
+    "Les fichiers restent à leur place" : {
 
     },
     "Les fichiers sont copiés, mais la galerie n'a pas pu être créée : %@" : {
@@ -530,13 +969,37 @@
     "Les photos à garder (%lld)" : {
 
     },
+    "Les photos que vous triez restent visibles jusqu'au prochain changement de filtre." : {
+
+    },
+    "Les photos restent à leur place : rien n'est copié ni déplacé." : {
+
+    },
+    "Les rafales sont regroupées et la meilleure photo mise en avant. Changez d'avis avec P, U ou X." : {
+
+    },
+    "Les vidéos ne sont pas triées par l'IA. Triez avec" : {
+
+    },
+    "les vidéos ne sont pas triées par l'IA. Triez-la avec P, U ou X." : {
+
+    },
+    "LinkLens ajoute des dossiers de photos : glissez un dossier depuis le Finder, ou choisissez « Ajouter un dossier… » (⌘O)." : {
+
+    },
     "LinkLens n'a pas l'autorisation de lire le dossier « %@ ». Choisissez-le à nouveau." : {
 
     },
     "LinkLens n'a pas l'autorisation de modifier ce dossier." : {
 
     },
-    "Mariage Julie & Tom" : {
+    "Liste" : {
+
+    },
+    "Liste des photos et des vidéos. Rien n'est modifié sur la carte." : {
+
+    },
+    "Lumière, cadrage ou sujet : l'IA la trouve moins réussie. À vous de juger." : {
 
     },
     "Masquer" : {
@@ -545,13 +1008,28 @@
     "Masquer jusqu'à la prochaine insertion de la carte" : {
 
     },
+    "Masquer l'inspecteur" : {
+
+    },
+    "Masquer l'inspecteur (⌥⌘I)" : {
+
+    },
+    "Masquer le cadre du sujet trouvé par l'IA" : {
+
+    },
+    "Meilleure" : {
+
+    },
     "Meilleure de la rafale" : {
 
     },
-    "Meilleure photo de la rafale" : {
+    "Meilleure de la rafale, votre choix" : {
 
     },
-    "Meilleure photo de la rafale, votre choix" : {
+    "meilleure photo de la rafale" : {
+
+    },
+    "Meilleure photo de la rafale" : {
 
     },
     "Meilleure selon l'IA" : {
@@ -572,8 +1050,45 @@
     "Moins bonne de la rafale (meilleure : %@)" : {
 
     },
+    "moins réussie que %@" : {
+
+    },
+    "Moins réussie que d'autres de la rafale" : {
+
+    },
+    "Montrer le sujet" : {
+
+    },
+    "ne correspond plus au filtre" : {
+
+    },
+    "Ne correspond plus au filtre : elle reste ici jusqu'au prochain changement de filtre." : {
+
+    },
     "Ne formatez pas la carte : tous ses fichiers ne sont pas copiés à l'identique." : {
 
+    },
+    "Nette" : {
+
+    },
+    "nette et bien exposée" : {
+
+    },
+    "Nette et bien exposée" : {
+
+    },
+    "Netteté" : {
+
+    },
+    "Netteté mesurée %@ : %@ (floue sous %@, légèrement floue sous %@)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Netteté mesurée %1$@ : %2$@ (floue sous %3$@, légèrement floue sous %4$@)"
+          }
+        }
+      }
     },
     "Nom de la séance" : {
 
@@ -581,13 +1096,19 @@
     "Nom le plus simple" : {
 
     },
+    "Objectif" : {
+
+    },
     "OK" : {
 
     },
-    "Oublier votre choix : le verdict proposé par l'IA s'applique à nouveau" : {
+    "Ou glissez un dossier de photos dans cette fenêtre" : {
 
     },
-    "P Garder · U À revoir · X Rejeter · A IA. Rien n'est supprimé." : {
+    "Oublier votre choix : la proposition de l'IA s'applique de nouveau (A)" : {
+
+    },
+    "Outils" : {
 
     },
     "Pas assez de place à cet emplacement : il faut %@, il reste %@." : {
@@ -603,28 +1124,58 @@
     "Pas de miniature en cache" : {
 
     },
+    "pas encore triée" : {
+
+    },
     "Pas encore triée" : {
+
+    },
+    "Pas encore triée par l'IA" : {
+
+    },
+    "Pas encore triée par l'IA. Triez avec" : {
+
+    },
+    "Pellicule" : {
+
+    },
+    "peu attrayante selon l'IA" : {
 
     },
     "Photo %lld sur %lld" : {
 
     },
-    "Photo précédente" : {
+    "photo floue" : {
 
     },
-    "Photo suivante" : {
+    "Photo peu attrayante" : {
+
+    },
+    "Photo précédente (←)" : {
+
+    },
+    "Photo précédente, touche flèche gauche" : {
+
+    },
+    "Photo suivante (→)" : {
+
+    },
+    "Photo suivante, touche flèche droite" : {
+
+    },
+    "photo un peu floue" : {
+
+    },
+    "photo utilitaire" : {
+
+    },
+    "Photo utilitaire" : {
 
     },
     "Photo utilitaire (document, capture d'écran…)" : {
 
     },
     "Photos" : {
-
-    },
-    "Photos exportées : %lld, dans « %@ »" : {
-
-    },
-    "Photos triées à la main. Un nouveau tri par l'IA ne les change pas." : {
 
     },
     "Pleine résolution, 8 bits, sRGB, compression sans perte (LZW), 300 ppp" : {
@@ -651,13 +1202,50 @@
     "Pour mettre des copies en double à la corbeille, LinkLens a besoin de votre accord pour modifier le dossier « %@ ». Seules les copies que vous avez confirmées seront déplacées." : {
 
     },
+    "Pourquoi ce choix" : {
+
+    },
+    "Pourquoi l'IA proposait « %@ »" : {
+
+    },
     "Préparation…" : {
+
+    },
+    "presque aussi bonne que %@" : {
 
     },
     "Presque aussi bonne que %@, la meilleure de la rafale" : {
 
     },
+    "Presque aussi bonne que la meilleure" : {
+
+    },
     "Prise de vue" : {
+
+    },
+    "prises du %@ au %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "prises du %1$@ au %2$@"
+          }
+        }
+      }
+    },
+    "prises le %@" : {
+
+    },
+    "Progression" : {
+
+    },
+    "Progression de l'import" : {
+
+    },
+    "proposé par l'IA" : {
+
+    },
+    "Proposé par l'IA. Changez avec" : {
 
     },
     "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé." : {
@@ -666,34 +1254,63 @@
     "Proposition de l'IA" : {
 
     },
-    "Proposition de l'IA : %@" : {
+    "Raccourci : Commande O" : {
+
+    },
+    "Raccourci : Majuscule Commande I" : {
 
     },
     "Rafale" : {
 
     },
+    "rafale %lld" : {
+
+    },
     "Rafale %lld" : {
 
     },
-    "Rafale %lld · %lld photos (S pour replier)" : {
-
+    "Rafale %lld ouverte · photo %lld sur %lld" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rafale %1$lld ouverte · photo %2$lld sur %3$lld"
+          }
+        }
+      }
     },
-    "Rafale %lld · %lld photos (S pour toutes les voir)" : {
-
+    "Rafale %lld repliée · %lld photos" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rafale %1$lld repliée · %2$lld photos"
+          }
+        }
+      }
     },
-    "Rafale %lld, %lld photos" : {
+    "Rafale de %lld photos" : {
 
     },
     "Rafale de %lld photos : voir toutes les photos (S)" : {
 
     },
+    "Rafale de %lld photos, ouverte" : {
+
+    },
     "Rafale de %lld photos, repliée" : {
 
     },
-    "Rafales : %lld" : {
+    "Rafale de %lld photos." : {
 
     },
     "Raison" : {
+
+    },
+    "raison inconnue" : {
+
+    },
+    "Raison inconnue" : {
 
     },
     "Raison inconnue (version plus récente de LinkLens)" : {
@@ -702,10 +1319,22 @@
     "Rangés dans" : {
 
     },
+    "Rangés dans %@" : {
+
+    },
+    "Recherche de doublons" : {
+
+    },
     "Rechercher les doublons" : {
 
     },
     "Rechercher les fichiers identiques dans toutes vos galeries" : {
+
+    },
+    "Réduire les vignettes" : {
+
+    },
+    "Réglages" : {
 
     },
     "Rejeter" : {
@@ -720,13 +1349,16 @@
     "Replier la rafale %lld" : {
 
     },
-    "Retour" : {
+    "Revenir à l'IA" : {
 
     },
     "Revenir à la meilleure selon l'IA" : {
 
     },
-    "Revenir à la proposition de l'IA (A)" : {
+    "Revenir à la proposition de l'IA" : {
+
+    },
+    "Revenir à la proposition de l'IA, touche A" : {
 
     },
     "Revenir aux photos (Espace ou Échap)" : {
@@ -741,10 +1373,25 @@
     "Sélectionnez une galerie" : {
 
     },
+    "sous-exposée" : {
+
+    },
+    "Sous-exposée" : {
+
+    },
     "Sous-exposée (%@ de pixels noirs)" : {
 
     },
+    "sujet collé à un bord" : {
+
+    },
     "Sujet collé à un bord (marge %@)" : {
+
+    },
+    "Sujet collé au bord" : {
+
+    },
+    "sujet collé au bord droit" : {
 
     },
     "Sujet collé au bord droit (marge %@)" : {
@@ -756,7 +1403,34 @@
     "Sujet collé au bord du haut (marge %@)" : {
 
     },
+    "sujet collé au bord gauche" : {
+
+    },
     "Sujet collé au bord gauche (marge %@)" : {
+
+    },
+    "sujet collé en bas" : {
+
+    },
+    "sujet collé en haut" : {
+
+    },
+    "sujet coupé" : {
+
+    },
+    "Sujet coupé" : {
+
+    },
+    "sujet coupé à droite" : {
+
+    },
+    "sujet coupé à gauche" : {
+
+    },
+    "sujet coupé en bas" : {
+
+    },
+    "sujet coupé en haut" : {
 
     },
     "Sujet coupé par le bas" : {
@@ -774,10 +1448,44 @@
     "Sujet coupé par un bord" : {
 
     },
-    "Tableau" : {
+    "Sujet détecté" : {
+
+    },
+    "Sujet détecté %@, %@. Il occupe %@ de la photo." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sujet détecté %1$@, %2$@. Il occupe %3$@ de la photo."
+          }
+        }
+      }
+    },
+    "sujet flou" : {
+
+    },
+    "sujet net et entier" : {
+
+    },
+    "Sujet net, cadrage complet" : {
+
+    },
+    "sujet un peu flou" : {
+
+    },
+    "sur le sujet" : {
+
+    },
+    "sur toute la photo" : {
 
     },
     "Taille" : {
+
+    },
+    "Taille des vignettes" : {
+
+    },
+    "Taille des vignettes (⌘+ / ⌘−)" : {
 
     },
     "Terminé" : {
@@ -786,7 +1494,7 @@
     "TIFF" : {
 
     },
-    "Touches pour trier la photo sélectionnée à la main : P Garder, U À revoir, X Rejeter, A revenir à la proposition de l'IA. ⌘Z annule. « Rejeter » ne supprime aucun fichier." : {
+    "Toutes" : {
 
     },
     "Toutes les photos (%lld)" : {
@@ -795,37 +1503,88 @@
     "Traiter ce groupe" : {
 
     },
+    "Très nette" : {
+
+    },
+    "très surexposée" : {
+
+    },
+    "Très surexposée" : {
+
+    },
     "Très surexposée (%@ de pixels brûlés)" : {
 
     },
     "Tri" : {
 
     },
-    "Tri des photos : %lld sur %lld" : {
+    "Tri de cette photo" : {
 
     },
-    "Tri en attente…" : {
+    "Tri en attente" : {
 
     },
     "Tri impossible" : {
 
     },
+    "Tri par l'IA" : {
+
+    },
     "Triée « Garder »" : {
+
+    },
+    "triée par l'IA" : {
+
+    },
+    "Trier" : {
 
     },
     "Trier à nouveau" : {
 
     },
+    "Trier cette photo" : {
+
+    },
     "Trier les photos" : {
 
     },
+    "Trier les photos dès la fin de l'import" : {
+
+    },
+    "Triez une séance en quelques minutes. L'IA propose Garder, À revoir ou Rejeter, et vous dit pourquoi. C'est toujours vous qui décidez." : {
+
+    },
+    "triez-la avec P, U ou X." : {
+
+    },
     "Un autre fichier porte déjà ce nom à cet endroit." : {
+
+    },
+    "Un bord de la photo coupe le sujet." : {
+
+    },
+    "Un dossier à la fois" : {
+
+    },
+    "Un dossier est déjà en cours d'indexation. Glissez le suivant quand la barre de progression a disparu." : {
+
+    },
+    "Une carte SD ou un dossier déjà rangé. Chaque fichier copié est vérifié avant de vous proposer de formater la carte." : {
+
+    },
+    "Une personne a les yeux fermés." : {
 
     },
     "Utiliser cet emplacement pour les prochains imports" : {
 
     },
     "Vidéo" : {
+
+    },
+    "Vidéo %@" : {
+
+    },
+    "Voir la rafale" : {
 
     },
     "Voir toute la rafale" : {
@@ -837,7 +1596,10 @@
     "Voir toutes les photos de la rafale (S)" : {
 
     },
-    "Vos choix : %lld" : {
+    "Vos photos restent sur ce Mac. L'IA propose, rien n'est supprimé sans vous." : {
+
+    },
+    "Vos séances apparaîtront ici, avec leur couverture et l'avancement du tri." : {
 
     },
     "votre choix" : {
@@ -846,13 +1608,37 @@
     "Votre choix" : {
 
     },
+    "Votre choix · l'IA proposait %@" : {
+
+    },
+    "Votre choix, le même que l'IA" : {
+
+    },
     "Vous pouvez formater la carte." : {
+
+    },
+    "yeux fermés" : {
+
+    },
+    "Yeux fermés" : {
 
     },
     "Yeux fermés (%lld visages)" : {
 
     },
     "Yeux fermés (1 visage)" : {
+
+    },
+    "Z ou Échap pour revenir" : {
+
+    },
+    "Zone de dépôt" : {
+
+    },
+    "zones claires brûlées" : {
+
+    },
+    "Zones claires brûlées" : {
 
     }
   },
