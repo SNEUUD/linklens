@@ -9,6 +9,8 @@ struct CapsuleButtonStyle: ButtonStyle {
     enum Kind {
         case prominent
         case secondary
+        /// Red, for an action that removes something (« Supprimer »).
+        case destructive
     }
 
     enum Size {
@@ -37,13 +39,15 @@ struct CapsuleButtonStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .font(font)
-                .foregroundStyle(kind == .prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+                .foregroundStyle(kind == .secondary ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.white))
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
                 .background {
                     switch kind {
                     case .prominent:
                         Capsule().fill(Palette.accent.color)
+                    case .destructive:
+                        Capsule().fill(Palette.rejectFill.color)
                     case .secondary:
                         Capsule()
                             .fill(Palette.card.color)
@@ -58,7 +62,7 @@ struct CapsuleButtonStyle: ButtonStyle {
         private var font: Font {
             switch size {
             case .large: .system(size: 14, weight: .semibold)
-            case .regular: .system(size: 13, weight: kind == .prominent ? .semibold : .medium)
+            case .regular: .system(size: 13, weight: kind == .secondary ? .medium : .semibold)
             case .small: .system(size: 12, weight: .medium)
             }
         }
@@ -66,7 +70,7 @@ struct CapsuleButtonStyle: ButtonStyle {
         private var horizontalPadding: CGFloat {
             switch size {
             case .large: 22
-            case .regular: kind == .prominent ? 20 : 18
+            case .regular: kind == .secondary ? 18 : 20
             case .small: 12
             }
         }

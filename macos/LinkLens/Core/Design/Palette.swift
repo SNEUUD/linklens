@@ -103,6 +103,9 @@ enum Palette {
     static let accentSoft = AdaptiveColor(light: 0x005FC4, dark: 0x4AA3FF, lightOpacity: 0.12, darkOpacity: 0.18)
     static let keepSoft = AdaptiveColor(light: 0x1A7334, dark: 0x45D97A, lightOpacity: 0.10, darkOpacity: 0.12)
     static let reviewSoft = AdaptiveColor(light: 0x9A4D00, dark: 0xFFAE42, lightOpacity: 0.10, darkOpacity: 0.12)
+    static let rejectSoft = AdaptiveColor(light: 0xC4001A, dark: 0xFF6B6B, lightOpacity: 0.10, darkOpacity: 0.14)
+    /// Behind the white text of « Supprimer »: darker than `reject` in dark mode, so white stays readable.
+    static let rejectFill = AdaptiveColor(light: 0xC4001A, dark: 0xD7263D)
 
     /// The lightest and darkest backgrounds text is drawn on (window, sidebar, selected chip),
     /// in each mode. The contrast test checks every text colour against all of them.

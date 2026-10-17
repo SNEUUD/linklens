@@ -219,26 +219,15 @@ final class DuplicatesController {
         var access = WriteAccess()
         // No folder picker for a disk that is not plugged in: its files are reported as left in place.
         for gallery in galleries where galleryAvailability(gallery.id).canUseOriginals {
-            if let bookmark = gallery.writeBookmark,
-               let folder = try? FolderBookmark.resolve(bookmark),
-               folder.startAccessingSecurityScopedResource() {
+            switch await GalleryWriteAccess.open(gallery, store: store, askUser: requestWriteAccess) {
+            case .opened(let folder, let isAccessing):
                 access.folders[gallery.id] = folder
-                access.accessed.append(folder)
-                continue
-            }
-            guard let chosen = requestWriteAccess(gallery) else { continue }
-            guard FolderBookmark.canonicalPath(of: chosen) == gallery.folderPath else {
+                if isAccessing { access.accessed.append(folder) }
+            case .wrongFolder:
                 errorMessage = String(localized: "Choisissez le dossier « \(gallery.name) » lui-même pour autoriser LinkLens à y faire le tri.")
+            case .refused:
                 continue
             }
-            if let bookmark = try? FolderBookmark.createReadWrite(for: chosen) {
-                try? await store.setWriteBookmark(bookmark, galleryId: gallery.id)
-            }
-            // A folder picked in the panel is open until the app quits; `startAccessing…` may return false.
-            if chosen.startAccessingSecurityScopedResource() {
-                access.accessed.append(chosen)
-            }
-            access.folders[gallery.id] = chosen
         }
         return access
     }
@@ -246,15 +235,9 @@ final class DuplicatesController {
     /// The sandbox only lets the app change a folder the user picked: the folder is shown, the user
     /// clicks "Autoriser". `static` because it is used as a default value of `init`.
     static func askForWriteAccess(_ gallery: GalleryLocation) -> URL? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        panel.directoryURL = URL(filePath: gallery.folderPath, directoryHint: .isDirectory)
-        panel.prompt = String(localized: "Autoriser")
-        panel.message = String(localized: "Pour mettre des copies en double à la corbeille, LinkLens a besoin de votre accord pour modifier le dossier « \(gallery.name) ». Seules les copies que vous avez confirmées seront déplacées.")
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url
+        GalleryWriteAccess.askUser(
+            for: gallery,
+            message: String(localized: "Pour mettre des copies en double à la corbeille, LinkLens a besoin de votre accord pour modifier le dossier « \(gallery.name) ». Seules les copies que vous avez confirmées seront déplacées.")
+        )
     }
 }
