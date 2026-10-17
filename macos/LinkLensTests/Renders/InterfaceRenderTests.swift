@@ -430,6 +430,86 @@ struct InterfaceRenderTests {
         }
     }
 
+    // MARK: - Deleting a gallery
+
+    /// The confirmation window over the session of September 20, the box unticked (as it opens).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func deletionWindow(appearance: WindowRenderer.Appearance) async throws {
+        try await renderDeletion(named: "suppression-galerie", appearance: appearance, alsoTrashFolder: false)
+    }
+
+    /// The same, « Mettre aussi le dossier à la corbeille » ticked.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func deletionWindowTicked(appearance: WindowRenderer.Appearance) async throws {
+        try await renderDeletion(named: "suppression-galerie-cochee", appearance: appearance, alsoTrashFolder: true)
+    }
+
+    /// The wedding gallery, its disk unplugged: the box is greyed out and says why.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func deletionWindowGreyedOut(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.deletionController.showForRenders(
+            request: GalleryDeletionRequest(library.wedding),
+            folderCheck: FolderTrashCheck(folderPath: library.wedding.folderPath, outcome: .blocked(.diskDisconnected(volumeName: "Photos 2TB")))
+        )
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.wedding),
+            named: "suppression-galerie-grisee",
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+    }
+
+    /// Right after a deletion with the folder: the forest gallery is shown, the banner offers « Annuler ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func deletionBanner(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.deletionController.showForRenders(request: nil, folderCheck: nil, banner: GalleryDeletionBanner(
+            galleryId: UUID(), galleryName: "Mariage Julie & Tom", kind: .deleted(folderTrashed: true)
+        ))
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "suppression-bandeau",
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+    }
+
+    /// After « Annuler », when the folder could not be put back (its place was taken).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func deletionBannerRestored(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.deletionController.showForRenders(request: nil, folderCheck: nil, banner: GalleryDeletionBanner(
+            galleryId: library.wedding.id, galleryName: library.wedding.name, kind: .restored(problem: FolderRestoreProblem.placeTaken.message)
+        ))
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.wedding),
+            named: "suppression-bandeau-retour",
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+    }
+
+    /// The session of September 20 (~/Downloads/photos, 52 RAW files, about 1,2 Go). The folder's listing
+    /// is made up: nothing reads or touches the real folder.
+    private func renderDeletion(named name: String, appearance: WindowRenderer.Appearance, alsoTrashFolder: Bool) async throws {
+        let library = try RenderLibrary()
+        let contents = FolderContents(entries: (0..<52).map {
+            FolderContents.Entry(relativePath: String(format: "DSC0%04d.ARW", 4297 + $0), size: 23_100_000, modifiedAt: nil)
+        })
+        library.deletionController.showForRenders(
+            request: GalleryDeletionRequest(library.session),
+            folderCheck: FolderTrashCheck(folderPath: library.session.folderPath, outcome: .allowed(contents)),
+            alsoTrashFolder: alsoTrashFolder
+        )
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: name,
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+    }
+
     /// The inspector is remembered in the user defaults (`@AppStorage`): shown for the render, then the
     /// previous value is put back.
     private func withInspectorShown(_ body: () async throws -> Void) async throws {
