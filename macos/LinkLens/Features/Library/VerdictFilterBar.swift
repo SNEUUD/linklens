@@ -12,7 +12,11 @@ struct VerdictFilterBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // `layoutPriority(1)`: when the row is narrow (inspector open), the filters get their full
+            // width before the spacer, so their labels stay on one line (`lineLimit(1)` below).
+            // No `fixedSize()` here: it triggered an AppKit layout loop (crash during the renders).
             VerdictFilterCapsule(filter: filter, counts: counts, onSelect: onSelect)
+                .layoutPriority(1)
             Spacer(minLength: 0)
             if let thumbnailWidth {
                 ThumbnailSizeSlider(width: thumbnailWidth)
@@ -58,6 +62,7 @@ private struct VerdictFilterCapsule: View {
                 Text(verbatim: counts.title(of: option))
                     .fontWeight(isSelected ? .semibold : .regular)
                     .monospacedDigit()
+                    .lineLimit(1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
