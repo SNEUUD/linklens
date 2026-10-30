@@ -86,6 +86,9 @@
     "%@ de la photo est noire, sans détail." : {
 
     },
+    "%@ de la photo est noire : il n'y a presque rien à voir." : {
+
+    },
     "%@ est un peu meilleure. Gardez celle-ci si vous la préférez." : {
 
     },
@@ -739,7 +742,13 @@
     "Floue (netteté de l'image %@ < %@)" : {
 
     },
+    "Floue (netteté de l'image %@, parmi les %@ les moins nettes)" : {
+
+    },
     "Floue (netteté du sujet %@ < %@)" : {
+
+    },
+    "Floue (netteté du sujet %@, parmi les %@ les moins nettes)" : {
 
     },
     "Format" : {
@@ -1024,7 +1033,13 @@
     "Légèrement floue (netteté de l'image %@ < %@)" : {
 
     },
+    "Légèrement floue (netteté de l'image %@, parmi les %@ les moins nettes)" : {
+
+    },
     "Légèrement floue (netteté du sujet %@ < %@)" : {
+
+    },
+    "Légèrement floue (netteté du sujet %@, parmi les %@ les moins nettes)" : {
 
     },
     "Les choix de tri de cette galerie seront perdus : Garder, À revoir, Rejeter et les meilleures photos des rafales. Les fichiers ne sont pas touchés, sauf si vous cochez la case ci-dessous." : {
@@ -1309,6 +1324,15 @@
 
     },
     "Presque aussi bonne que la meilleure" : {
+
+    },
+    "presque entièrement noire" : {
+
+    },
+    "Presque entièrement noire" : {
+
+    },
+    "Presque entièrement noire (%@ de pixels noirs)" : {
 
     },
     "Prise de vue" : {
