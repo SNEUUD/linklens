@@ -430,6 +430,123 @@ struct InterfaceRenderTests {
         }
     }
 
+    // MARK: - Review of the « À revoir » photos
+
+    /// Burst 4 (DSC04307–04313): the best photo DSC04311 (kept by the user) next to DSC04312, the whole
+    /// burst below. Each photo of a burst has its best photo's thumbnail (the 14 real ones only).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewBurst(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let compared = try #require(library.session.photos.first { $0.relativePath == "DSC04312.ARW" })
+        try await renderReview(named: "revue-rafale", library: library, appearance: appearance) { session in
+            session.reveal(compared.id)
+        }
+    }
+
+    /// A photo on its own (DSC04317, made « À revoir » for the render: subject a little blurry, cut on the right).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewSinglePhoto(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let photo = try #require(library.session.photos.first { $0.relativePath == "DSC04317.ARW" })
+        photo.cullingVerdictRaw = "review"
+        photo.cullingReasonsData = try JSONEncoder().encode([
+            CullingReason(kind: .slightlyBlurry, verdict: .review, value: 34, threshold: 45, onSubject: true),
+            CullingReason(kind: .subjectCut, verdict: .review, value: 0.01, side: .right),
+        ])
+        try library.container.mainContext.save()
+        try await renderReview(named: "revue-photo-seule", library: library, appearance: appearance) { session in
+            session.reveal(photo.id)
+        }
+    }
+
+    /// The end: half the photos to review kept, the others rejected but two.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewSummary(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try await renderReview(named: "revue-bilan", library: library, appearance: appearance) { session in
+            let ids = session.stops.flatMap(\.reviewIds)
+            for (index, id) in ids.enumerated() where index >= 2 {
+                library.session.photos.first { $0.id == id }?.userVerdictRaw = index % 2 == 0 ? "keep" : "reject"
+            }
+            try library.container.mainContext.save()
+            session.goToStop(session.stops.count)
+        }
+    }
+
+    /// F9: the wedding gallery, its disk unplugged: cached thumbnails, « zoom 100 % indisponible ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewWithDiskUnplugged(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.availabilityMonitor.refresh()
+        await library.availabilityMonitor.waitUntilIdle()
+        try #require(!library.availabilityMonitor.availability(of: library.wedding.id).canUseOriginals)
+        try await renderReview(named: "revue-disque-absent", library: library, gallery: library.wedding, appearance: appearance) { _ in }
+    }
+
+    /// The same at 1440 points, inspector closed: the whole title « Reprendre la revue (reste N) ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewResumeWide(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let session = library.reviewController.open(galleryId: library.session.id, photos: Self.reviewInputs(of: library.session))
+        session.skip()
+        library.reviewController.close(galleryId: library.session.id)
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "revue-reprendre-large",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// The grid after Escape half-way, at the app's default width with the inspector open (the narrowest
+    /// case): « Reprendre (N) » next to the filters, the size slider gives way to it.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewResume(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let session = library.reviewController.open(galleryId: library.session.id, photos: Self.reviewInputs(of: library.session))
+        session.skip()
+        session.skip()
+        library.reviewController.close(galleryId: library.session.id)
+        try await withInspector(shown: true) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "revue-reprendre",
+                size: CGSize(width: 1280, height: 800),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// Opens the review of `gallery` (the session of September 20 by default), lets `prepare` move it, renders.
+    private func renderReview(
+        named name: String,
+        library: RenderLibrary,
+        gallery: Gallery? = nil,
+        appearance: WindowRenderer.Appearance,
+        prepare: (ReviewSession) throws -> Void
+    ) async throws {
+        let gallery = gallery ?? library.session
+        let session = library.reviewController.open(galleryId: gallery.id, photos: Self.reviewInputs(of: gallery))
+        try prepare(session)
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: gallery),
+                named: name,
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// The photos as `GalleryDetailView` gives them to the review: by date, then by name.
+    private static func reviewInputs(of gallery: Gallery) -> [BurstStacks.Input] {
+        gallery.photos
+            .sorted { ($0.captureDate ?? .distantPast, $0.relativePath) < ($1.captureDate ?? .distantPast, $1.relativePath) }
+            .map(\.burstInput)
+    }
+
     // MARK: - Deleting a gallery
 
     /// The confirmation window over the session of September 20, the box unticked (as it opens).
