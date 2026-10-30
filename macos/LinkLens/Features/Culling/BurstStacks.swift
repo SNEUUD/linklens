@@ -67,6 +67,8 @@ enum BurstStacks {
         var bestChosenAt: Date?
         /// The verdict shown (the user's choice, otherwise the AI's), for the verdict filters.
         var verdict: CullingVerdict?
+        /// True when `verdict` is the user's choice (P, U, X), false when it is the AI's proposal.
+        var isVerdictChosenByUser = false
     }
 
     /// - Parameters:
@@ -94,19 +96,25 @@ enum BurstStacks {
             // The whole burst is added when its first member is reached; the other members are skipped.
             guard burst[0] == index else { continue }
 
-            let userCover = userChosenCover(of: burst, in: photos)
-            let cover = userCover ?? aiCover(of: burst, in: photos)
+            let (cover, isChosenByUser) = Self.cover(of: burst, in: photos)
             let isExpanded = expanded.contains(number)
             let shown = isExpanded ? burst : [cover]
             for member in shown {
                 let placement = BurstPlacement(
                     number: number, count: burst.count, isExpanded: isExpanded,
-                    isCover: member == cover, isCoverChosenByUser: userCover != nil
+                    isCover: member == cover, isCoverChosenByUser: isChosenByUser
                 )
                 entries.append(GalleryEntry(photoId: photos[member].id, photoIndex: member, burst: placement))
             }
         }
         return entries
+    }
+
+    /// The best photo of a burst (`burst` holds positions in `photos`): the user's choice (B), else the AI's,
+    /// else the first photo. Also used by the review of the « À revoir » photos.
+    static func cover(of burst: [Int], in photos: [Input]) -> (index: Int, isChosenByUser: Bool) {
+        if let chosen = userChosenCover(of: burst, in: photos) { return (chosen, true) }
+        return (aiCover(of: burst, in: photos), false)
     }
 
     /// The photo the user chose most recently in this burst, nil if they chose none. Choices are tied to

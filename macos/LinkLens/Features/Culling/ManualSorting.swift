@@ -100,6 +100,9 @@ final class ManualSorter {
     // `weak`: the window owns its undo manager; this reference does not keep it alive
     // (like a `WeakRef` in JavaScript, it becomes nil when the window goes away).
     weak var undoManager: UndoManager?
+    /// Told which photo an undo or redo changed, after the browser selected it: the review of the
+    /// « À revoir » photos then goes back to that photo's stop.
+    var onRestore: ((UUID) -> Void)?
     private weak var browser: GalleryBrowser?
 
     init(browser: GalleryBrowser?, context: ModelContext? = nil, undoManager: UndoManager? = nil) {
@@ -130,6 +133,20 @@ final class ManualSorter {
             return try save(changes, actionName: command.undoActionName)
         } catch {
             Self.logger.error("Manual verdict not saved: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    /// Return in the review of a burst: « Garder la ★, rejeter les autres ». The best photo becomes
+    /// « Garder », the others « Rejeter », as the user's choices, in one save and one undo step.
+    @discardableResult
+    func keep(_ bestId: UUID, rejecting otherIds: [UUID]) -> Bool {
+        let changes = [VerdictChange(photoId: bestId, userVerdictRaw: CullingVerdict.keep.rawValue)]
+            + otherIds.map { VerdictChange(photoId: $0, userVerdictRaw: CullingVerdict.reject.rawValue) }
+        do {
+            return try save(changes, actionName: String(localized: "Garder la meilleure, rejeter les autres"))
+        } catch {
+            Self.logger.error("Burst decision not saved: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
@@ -180,6 +197,7 @@ final class ManualSorter {
         }
         if let photoId = changes.first?.photoId {
             browser?.reveal(photoId)
+            onRestore?(photoId)
         }
     }
 
@@ -286,6 +304,7 @@ final class ManualSorter {
         }
         if let photoId = (changes.first { $0.chosenAt != nil } ?? changes.first)?.photoId {
             browser?.reveal(photoId)
+            onRestore?(photoId)
         }
     }
 

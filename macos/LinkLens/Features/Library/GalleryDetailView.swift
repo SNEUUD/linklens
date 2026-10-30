@@ -18,7 +18,8 @@ struct DisplayedPhoto: Identifiable {
 extension Photo {
     var burstInput: BurstStacks.Input {
         BurstStacks.Input(
-            id: id, burstNumber: burstNumber, isBestOfBurst: isBestOfBurst, bestChosenAt: bestOfBurstChosenAt, verdict: verdict
+            id: id, burstNumber: burstNumber, isBestOfBurst: isBestOfBurst, bestChosenAt: bestOfBurstChosenAt, verdict: verdict,
+            isVerdictChosenByUser: isVerdictChosenByUser
         )
     }
 }
