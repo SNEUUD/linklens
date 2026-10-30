@@ -56,7 +56,7 @@ macos/LinkLensTests/
 - Garder un test de volume à 10 000 photos ; si les performances ne suffisent pas, le signaler (GRDB est la solution de repli prévue).
 
 ### IA (F3, F4)
-- Similarité : `VNGenerateImageFeaturePrintRequest`. Visages : `VNDetectFaceCaptureQualityRequest` + points du visage (yeux fermés). Score : `VNCalculateImageAestheticsScoresRequest`. Flou : variance du Laplacien via Accelerate.
+- Similarité : `VNGenerateImageFeaturePrintRequest`. Visages : `VNDetectFaceCaptureQualityRequest` + points du visage (yeux fermés). Score : `VNCalculateImageAestheticsScoresRequest`. Flou : largeur des contours zone par zone (dérivées via Accelerate), jugée aussi par rapport au reste de la galerie.
 - Chaque classement (Garder / À revoir / Rejeter) stocke **la raison** affichée à l'utilisateur.
 - Analyse en parallèle, avec progression visible et annulable.
 
