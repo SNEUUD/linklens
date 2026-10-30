@@ -9,6 +9,9 @@ struct VerdictFilterBar: View {
     let onSelect: (VerdictFilter) -> Void
     /// Nil hides the slider (table, viewer).
     var thumbnailWidth: Binding<Double>?
+    /// « Revoir les 14 » or « Reprendre la revue (reste 9) »; nil when nothing is « À revoir ».
+    var review: ReviewEntryPoint? = nil
+    var onReview: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
@@ -18,13 +21,32 @@ struct VerdictFilterBar: View {
             VerdictFilterCapsule(filter: filter, counts: counts, onSelect: onSelect)
                 .layoutPriority(1)
             Spacer(minLength: 0)
-            if let thumbnailWidth {
+            if let review {
+                // `ViewThatFits` shows the first version that fits the width left by the filters (like a
+                // series of CSS container queries): the review button shrinks first, then the slider
+                // gives way to it (⌘+ / ⌘− still resize the thumbnails).
+                ViewThatFits(in: .horizontal) {
+                    trailing(review, style: .full, showsSlider: true)
+                    trailing(review, style: .short, showsSlider: true)
+                    trailing(review, style: .short, showsSlider: false)
+                    trailing(review, style: .compact, showsSlider: false)
+                }
+            } else if let thumbnailWidth {
                 ThumbnailSizeSlider(width: thumbnailWidth)
             }
         }
         .padding(.horizontal, GridLayout.padding)
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+
+    private func trailing(_ review: ReviewEntryPoint, style: ReviewEntryButton.Style, showsSlider: Bool) -> some View {
+        HStack(spacing: 12) {
+            ReviewEntryButton(entryPoint: review, style: style, action: onReview)
+            if showsSlider, let thumbnailWidth {
+                ThumbnailSizeSlider(width: thumbnailWidth)
+            }
+        }
     }
 }
 

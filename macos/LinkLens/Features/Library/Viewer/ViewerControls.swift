@@ -125,8 +125,8 @@ struct ViewerSortingBar: View {
 }
 
 /// One button of the sorting bar: symbol, word and key; tinted on a soft background when it is the
-/// photo's current state.
-private struct ViewerSegment: View {
+/// photo's current state. Also used by the review's bar.
+struct ViewerSegment: View {
     let title: String
     let key: String
     let symbolName: String?
@@ -306,8 +306,9 @@ struct ViewerFilmstrip: View {
     }
 }
 
-/// One thumbnail of the filmstrip: the cached thumbnail, generated if needed, filling its frame.
-private struct FilmstripThumbnail: View {
+/// One thumbnail of the filmstrip (and of the review's burst strip): the cached thumbnail, generated if
+/// needed, filling its frame.
+struct FilmstripThumbnail: View {
     let photo: Photo
     let loader: ThumbnailLoader
     let canUseOriginals: Bool

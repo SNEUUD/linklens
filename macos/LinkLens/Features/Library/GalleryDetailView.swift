@@ -35,6 +35,7 @@ struct GalleryDetailView: View {
     @Environment(DuplicatesController.self) private var duplicatesController
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
     @Environment(DetailsBackfillController.self) private var detailsController
+    @Environment(ReviewController.self) private var reviewController
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
     @Query private var photos: [Photo]
@@ -101,28 +102,30 @@ struct GalleryDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // The viewer takes the whole window: its own « Aperçu réduit » notice replaces the banner.
-            if !availability.canUseOriginals, !browser.isViewerOpen {
+            // The viewer and the review take the whole window: their own notice replaces the banner.
+            if !availability.canUseOriginals, !isFullWindow {
                 UnavailableGalleryBar(availability: availability)
             }
-            if !photos.isEmpty, !browser.isViewerOpen {
+            if !photos.isEmpty, !isFullWindow {
                 VerdictFilterBar(
                     filter: browser.filter,
                     counts: filterCounts,
                     onSelect: selectFilter,
-                    thumbnailWidth: showsGrid ? $thumbnailWidth : nil
+                    thumbnailWidth: showsGrid ? $thumbnailWidth : nil,
+                    review: reviewEntryPoint,
+                    onReview: openReview
                 )
             }
             content
                 .frame(maxHeight: .infinity)
                 // While the pill is shown, the last row can scroll above it instead of staying under it.
-                .contentMargins(.bottom, activities.isEmpty || browser.isViewerOpen ? 0 : ActivityPillView.reservedHeight, for: .scrollContent)
+                .contentMargins(.bottom, activities.isEmpty || isFullWindow ? 0 : ActivityPillView.reservedHeight, for: .scrollContent)
         }
         // `safeAreaInset` pins the pill over the bottom of the photos: they scroll under it, and the
         // last row can still be scrolled above it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Not over the viewer's filmstrip: it comes back with the grid.
-            if !browser.isViewerOpen, let pill = ActivityPill.content(for: activities) {
+            // Not over the viewer's filmstrip nor the review: it comes back with the grid.
+            if !isFullWindow, let pill = ActivityPill.content(for: activities) {
                 ActivityPillView(content: pill, onCancel: cancel, onRevealExport: exportController.revealExportedFiles)
                     .padding(.bottom, 18)
                     .frame(maxWidth: .infinity)
@@ -135,12 +138,12 @@ struct GalleryDetailView: View {
         // toolbar button and the « Présentation » menu (⌥⌘I).
         .inspector(isPresented: $isInspectorShown) {
             PhotoInspector(
-                photo: selectedPhoto,
-                burstMembers: selectedBurstMembers,
+                photo: inspectedPhoto,
+                burstMembers: inspectedBurstMembers,
                 loader: loader,
                 canUseOriginals: availability.canUseOriginals,
                 onSort: { command in
-                    guard let photoId = selectedPhoto?.id else { return }
+                    guard let photoId = inspectedPhoto?.id else { return }
                     sorter.apply(command, to: [photoId])
                 }
             )
@@ -153,10 +156,12 @@ struct GalleryDetailView: View {
             }
         }
         // In the viewer, the window's title is the photo's name and its subtitle says where it is.
-        .navigationTitle(viewerPhoto.map { Text(verbatim: $0.fileName) } ?? Text(verbatim: gallery.name))
-        .navigationSubtitle(viewerPhoto == nil ? subtitle : Text(verbatim: viewerContext))
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(windowSubtitle)
         .toolbar {
-            if browser.isViewerOpen {
+            if isReviewOpen {
+                reviewToolbar
+            } else if browser.isViewerOpen {
                 viewerToolbar
             } else {
                 galleryToolbar
@@ -164,8 +169,8 @@ struct GalleryDetailView: View {
         }
         // Full window: a see-through toolbar over the viewer's background (the sidebar button is removed
         // by `ContentView`, which owns the sidebar).
-        .toolbarBackgroundVisibility(browser.isViewerOpen ? .hidden : .automatic, for: .windowToolbar)
-        .onChange(of: browser.isViewerOpen) { _, isOpen in onViewerChange(isOpen) }
+        .toolbarBackgroundVisibility(isFullWindow ? .hidden : .automatic, for: .windowToolbar)
+        .onChange(of: isFullWindow, initial: true) { _, isFull in onViewerChange(isFull) }
         // Publishes the actions of this gallery to the « Galerie » and « Présentation » menus.
         .focusedSceneValue(\.galleryMenuActions, menuActions)
         .focusedSceneValue(\.galleryPresentation, presentationActions)
@@ -185,6 +190,8 @@ struct GalleryDetailView: View {
         }
         .onDisappear {
             loader.stop()
+            // Another gallery is shown: the review is left where it was (« Reprendre la revue »).
+            if isReviewOpen { reviewController.close(galleryId: gallery.id) }
             onViewerChange(false)
         }
         // The environment is only known once the view is on screen; the window's undo manager can change.
@@ -193,8 +200,15 @@ struct GalleryDetailView: View {
             sorter.undoManager = undoManager
         }
         // Again after a sorting: the bursts are stored on the photos.
-        .onChange(of: photos.map(\.burstInput), initial: true) { _, inputs in browser.setPhotos(inputs) }
-        .onChange(of: gallery.culledAt) { browser.gallerySortedAgain() }
+        .onChange(of: photos.map(\.burstInput), initial: true) { _, inputs in
+            browser.setPhotos(inputs)
+            reviewSession?.update(inputs)
+        }
+        // A new sorting changes the bursts and their best photos: a review under way starts again.
+        .onChange(of: gallery.culledAt) {
+            browser.gallerySortedAgain()
+            reviewController.discard(galleryId: gallery.id)
+        }
         .onChange(of: layout) { browser.closeViewer() }
         .alert(
             "Dossier inaccessible",
@@ -259,9 +273,76 @@ struct GalleryDetailView: View {
         InspectorToggle(isOn: $isInspectorShown)
     }
 
+    /// The review's top bar: « ‹ Terminer » (Escape) before the title, the inspector on the right.
+    @ToolbarContentBuilder private var reviewToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button(action: closeReview) {
+                Label("Terminer", systemImage: "chevron.left")
+            }
+            .labelStyle(.titleAndIcon)
+            .help("Quitter la revue (Échap). « Reprendre la revue » vous ramène ici.")
+        }
+        InspectorToggle(isOn: $isInspectorShown)
+    }
+
     /// The photo shown by the viewer, nil while it is closed.
     private var viewerPhoto: Photo? {
         browser.isViewerOpen ? selectedPhoto : nil
+    }
+
+    private var windowTitle: Text {
+        if isReviewOpen { return Text("Revue · \(gallery.name)") }
+        return viewerPhoto.map { Text(verbatim: $0.fileName) } ?? Text(verbatim: gallery.name)
+    }
+
+    /// « 4 sur 9 · reste 12 photos à revoir » during the review.
+    private var windowSubtitle: Text {
+        if isReviewOpen, let session = reviewSession {
+            guard !session.isFinished else { return Text("Revue terminée") }
+            return Text(verbatim: ReviewText.counter(position: session.position, total: session.stops.count)
+                + " · " + ReviewText.remaining(session.remainingCount))
+        }
+        return viewerPhoto == nil ? subtitle : Text(verbatim: viewerContext)
+    }
+
+    // MARK: - Review of the « À revoir » photos
+
+    private var reviewSession: ReviewSession? {
+        reviewController.session(for: gallery.id)
+    }
+
+    private var isReviewOpen: Bool {
+        reviewSession?.isOpen == true
+    }
+
+    /// The viewer or the review takes the whole window (sidebar, filters and pill hidden).
+    private var isFullWindow: Bool {
+        browser.isViewerOpen || isReviewOpen
+    }
+
+    /// « Revoir les 14 », « Reprendre la revue (reste 9) », or nil when nothing is « À revoir ».
+    private var reviewEntryPoint: ReviewEntryPoint? {
+        reviewController.entryPoint(galleryId: gallery.id, reviewCount: filterCounts.review)
+    }
+
+    /// The button, ⌘R or the menu: resumes the review left half-way, else starts one.
+    private func openReview() {
+        browser.closeViewer()
+        reviewController.open(galleryId: gallery.id, photos: photos.map(\.burstInput))
+    }
+
+    /// Escape or « Terminer »: the grid comes back on the last photo shown; the position is kept.
+    private func closeReview() {
+        if let photoId = reviewSession?.focusedPhotoId {
+            browser.reveal(photoId)
+        }
+        reviewController.close(galleryId: gallery.id)
+    }
+
+    /// « Revoir les N restantes » at the end: a new review of what is still « À revoir ».
+    private func reviewRemaining() {
+        reviewController.discard(galleryId: gallery.id)
+        openReview()
     }
 
     /// « Rafale 4 ouverte · photo 5 sur 7 », « Photo 12 sur 52 », « À revoir · photo 3 sur 14 ».
@@ -300,7 +381,10 @@ struct GalleryDetailView: View {
         // Not over the full-window viewer (where ⌘⌫ could be taken for « delete this photo »), nor
         // while the export window is open.
         var delete: (@MainActor () -> Void)?
-        if let onDelete, !browser.isViewerOpen, !isExportSheetPresented { delete = { onDelete() } }
+        if let onDelete, !isFullWindow, !isExportSheetPresented { delete = { onDelete() } }
+        var review: (@MainActor () -> Void)?
+        let entryPoint = reviewEntryPoint
+        if entryPoint != nil, !isReviewOpen, !isExportSheetPresented { review = { openReview() } }
         let defaultCullHelp = String(localized: "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
         let defaultExportHelp = String(localized: "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés.")
         let defaultRevealHelp = String(localized: "Afficher le dossier de la galerie dans le Finder")
@@ -313,7 +397,9 @@ struct GalleryDetailView: View {
             reveal: reveal,
             revealHelp: availability.help(for: .reveal) ?? defaultRevealHelp,
             delete: delete,
-            deleteHelp: deleteHelp
+            deleteHelp: deleteHelp,
+            reviewTitle: entryPoint?.menuTitle ?? String(localized: "Revoir les photos à revoir…"),
+            review: review
         )
     }
 
@@ -324,9 +410,16 @@ struct GalleryDetailView: View {
         return photos.first { $0.id == selection }
     }
 
-    /// Every photo of the selected photo's burst, for « 7 photos prises dans la même seconde ».
-    private var selectedBurstMembers: [Photo] {
-        guard let number = selectedPhoto?.burstNumber else { return [] }
+    /// The photo the inspector shows: the one shown by the review while it is open, else the selection.
+    private var inspectedPhoto: Photo? {
+        guard isReviewOpen else { return selectedPhoto }
+        guard let photoId = reviewSession?.focusedPhotoId else { return nil }
+        return photos.first { $0.id == photoId }
+    }
+
+    /// Every photo of the inspected photo's burst, for « 7 photos prises dans la même seconde ».
+    private var inspectedBurstMembers: [Photo] {
+        guard let number = inspectedPhoto?.burstNumber else { return [] }
         return photos.filter { $0.burstNumber == number }
     }
 
@@ -407,7 +500,19 @@ struct GalleryDetailView: View {
     // `@ViewBuilder` lets a property return different views from an `if` / `switch`, like a JSX ternary.
     @ViewBuilder private var content: some View {
         let rows = rows
-        if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
+        if isReviewOpen, let session = reviewSession {
+            ReviewModeView(
+                session: session,
+                photosById: Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
+                loader: loader,
+                sorter: sorter,
+                availability: availability,
+                onClose: closeReview,
+                onReviewRemaining: reviewRemaining
+            )
+            // A new review is a new view: its key handlers and zoom start afresh.
+            .id(ObjectIdentifier(session))
+        } else if browser.isViewerOpen, let index = rows.firstIndex(where: { $0.id == browser.selection }) {
             PhotoViewer(
                 rows: rows, index: index, loader: loader, browser: browser, sorter: sorter, availability: availability,
                 cellAspectRatio: cellAspectRatio

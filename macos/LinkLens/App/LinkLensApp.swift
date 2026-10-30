@@ -16,6 +16,8 @@ struct LinkLensApp: App {
     @State private var availabilityMonitor: GalleryAvailabilityMonitor
     @State private var detailsController: DetailsBackfillController
     @State private var deletionController: GalleryDeletionController
+    /// The reviews of the « À revoir » photos, kept while the app runs (« Reprendre la revue »).
+    @State private var reviewController = ReviewController()
 
     init() {
         do {
@@ -105,6 +107,7 @@ struct LinkLensApp: App {
                 .environment(availabilityMonitor)
                 .environment(detailsController)
                 .environment(deletionController)
+                .environment(reviewController)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.
         .defaultSize(width: 1280, height: 760)

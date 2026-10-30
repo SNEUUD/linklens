@@ -25,6 +25,8 @@ final class RenderLibrary {
     let detailsController: DetailsBackfillController
     /// Its own thumbnail cache and purge file: never the app's.
     let deletionController: GalleryDeletionController
+    /// A review can be opened or left half-way before a render.
+    let reviewController = ReviewController()
 
     init() throws {
         container = try ModelContainer(
@@ -137,6 +139,7 @@ final class RenderLibrary {
             .environment(availabilityMonitor)
             .environment(detailsController)
             .environment(deletionController)
+            .environment(reviewController)
             .environment(\.thumbnailCache, cache)
             .modelContainer(container)
     }

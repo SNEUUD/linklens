@@ -16,6 +16,10 @@ struct GalleryMenuActions: Sendable {
     /// « Supprimer la galerie… » (⌘⌫): opens the confirmation window. Nil while it cannot be deleted.
     var delete: (@MainActor () -> Void)? = nil
     var deleteHelp = ""
+    /// « Revoir les photos à revoir… » or « Reprendre la revue… » (⌘R). Nil when there is nothing to review
+    /// or the review is already shown.
+    var reviewTitle = String(localized: "Revoir les photos à revoir…")
+    var review: (@MainActor () -> Void)? = nil
 }
 
 /// What the « Présentation » menu can do for the gallery in the front window: the verdict filters
@@ -44,8 +48,8 @@ struct MenuAction: Sendable {
     let perform: @MainActor () -> Void
 }
 
-/// The « Galerie » menu of the menu bar: Trier à nouveau, Exporter…, Afficher dans le Finder, Doublons…,
-/// Supprimer la galerie….
+/// The « Galerie » menu of the menu bar: Trier à nouveau, Exporter…, Afficher dans le Finder, Revoir les
+/// photos à revoir…, Doublons…, Supprimer la galerie….
 struct GalleryMenuCommands: View {
     @FocusedValue(\.galleryMenuActions) private var actions
     @FocusedValue(\.showDuplicates) private var showDuplicates
@@ -61,6 +65,12 @@ struct GalleryMenuCommands: View {
         Button("Afficher dans le Finder") { actions?.reveal?() }
             .disabled(actions?.reveal == nil)
             .help(actions?.revealHelp ?? "")
+        Divider()
+        // ⌘R: free in the system's menus (no « Reload » in a Mac app without a web view).
+        Button(actions?.reviewTitle ?? String(localized: "Revoir les photos à revoir…")) { actions?.review?() }
+            .keyboardShortcut("r")
+            .disabled(actions?.review == nil)
+            .help("Passer en revue les photos « À revoir », une rafale à la fois")
         Divider()
         Button("Doublons…") { showDuplicates?.perform() }
             .disabled(showDuplicates == nil)

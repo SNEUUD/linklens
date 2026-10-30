@@ -254,6 +254,7 @@ struct ContentView: View {
         .environment(GalleryAvailabilityMonitor(store: store))
         .environment(DetailsBackfillController(store: store))
         .environment(GalleryDeletionController(store: store))
+        .environment(ReviewController())
         .modelContainer(container)
 }
 

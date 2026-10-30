@@ -45,8 +45,9 @@ final class ThumbnailLoader {
     private var idleWaiters: [CheckedContinuation<Void, Never>] = []
     /// Large previews of the viewer, most recent last (a few only: about 7 MB each).
     private var previews: [(photoId: UUID, image: CGImage)] = []
-    /// The last photo read at full resolution (viewer zoom).
-    private var fullSize: (photoId: UUID, image: CGImage)?
+    /// The last two photos read at full resolution (viewer zoom; the review compares two side by side),
+    /// most recent last.
+    private var fullSizes: [(photoId: UUID, image: CGImage)] = []
     private var isStopped = false
     private var generatedCount = 0
     private var busySince: ContinuousClock.Instant?
@@ -77,7 +78,7 @@ final class ThumbnailLoader {
     /// Closes the folder and wakes up everyone still waiting (with no image).
     func stop() {
         isStopped = true
-        fullSize = nil
+        fullSizes = []
         closeFolder()
         resumeIdleWaiters()
     }
@@ -160,13 +161,20 @@ final class ThumbnailLoader {
         return image
     }
 
-    /// The photo at full resolution, for the viewer's 100 % zoom. Only the last one is kept (about
-    /// 96 MB for 24 megapixels). Nil for a video or when the folder is out of reach (F9).
+    /// The photo at full resolution, for the 100 % zoom. Only the last two are kept (about 96 MB each
+    /// for 24 megapixels). Nil for a video or when the folder is out of reach (F9).
     func fullImage(for request: ThumbnailRequest) async -> CGImage? {
-        if let fullSize, fullSize.photoId == request.photoId { return fullSize.image }
+        if let index = fullSizes.firstIndex(where: { $0.photoId == request.photoId }) {
+            let entry = fullSizes.remove(at: index)
+            fullSizes.append(entry)
+            return entry.image
+        }
         guard let folder, MediaKind(relativePath: request.relativePath) != .video else { return nil }
         guard let image = await Self.loadFullSize(folder.appending(path: request.relativePath)) else { return nil }
-        fullSize = (request.photoId, image)
+        if !fullSizes.contains(where: { $0.photoId == request.photoId }) {
+            fullSizes.append((request.photoId, image))
+            if fullSizes.count > 2 { fullSizes.removeFirst() }
+        }
         return image
     }
 
