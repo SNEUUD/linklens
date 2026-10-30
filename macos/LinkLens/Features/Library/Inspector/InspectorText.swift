@@ -140,6 +140,12 @@ enum ReasonExplanations {
                 title: String(localized: "Sous-exposée"),
                 detail: String(localized: "\(share) de la photo est noire, sans détail.")
             )
+        case .nearlyBlack:
+            return ReasonExplanation(
+                symbolName: "moon", tone: tone,
+                title: String(localized: "Presque entièrement noire"),
+                detail: String(localized: "\(share) de la photo est noire : il n'y a presque rien à voir.")
+            )
         case .eyesClosed:
             let faces = reason.count ?? 1
             return ReasonExplanation(
@@ -254,10 +260,11 @@ struct GaugeReading: Equatable, Sendable {
 
 enum InspectorGauges {
     /// Above this sharpness, a photo is « Très nette ». Only a word for the inspector: the verdicts use
-    /// `CullingThresholds` alone. (The first real session went from 30 to 171.)
-    static let verySharp = 120.0
-    /// The bar is on a logarithmic scale between these two values (sharpness grows very fast).
-    static let sharpnessScale = 20.0...200.0
+    /// `CullingThresholds` alone (and compare with the rest of the gallery). On a varied gallery of
+    /// 4,120 photos, half are above 80 and 1 % below 35.
+    static let verySharp = 80.0
+    /// The bar is on a logarithmic scale between these two values.
+    static let sharpnessScale = 25.0...100.0
 
     static func sharpness(
         _ value: Double,

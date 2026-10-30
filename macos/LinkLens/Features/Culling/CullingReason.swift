@@ -46,7 +46,7 @@ struct CullingReason: Codable, Sendable, Equatable {
     enum Kind: String, Codable, Sendable {
         case blurry, slightlyBlurry
         case subjectCut, subjectTight
-        case overexposed, slightlyOverexposed, underexposed
+        case overexposed, slightlyOverexposed, underexposed, nearlyBlack
         case eyesClosed
         case lowAesthetics, utility
         case burstRunnerUp, burstLoser, bestOfBurst
@@ -68,6 +68,9 @@ struct CullingReason: Codable, Sendable, Equatable {
     var threshold: Double?
     /// Blur: measured on the subject (true) or on the whole image (false).
     var onSubject: Bool?
+    /// Blur: share of the gallery at most as sharp as this photo (0.05 = among the 5 % least sharp).
+    /// Nil for a small gallery, judged on the score alone, and for reasons stored by older versions.
+    var galleryShare: Double?
     /// Framing: the image border closest to the subject.
     var side: FrameSide?
     /// Number of faces with closed eyes.
@@ -83,6 +86,7 @@ struct CullingReason: Codable, Sendable, Equatable {
         value: Double? = nil,
         threshold: Double? = nil,
         onSubject: Bool? = nil,
+        galleryShare: Double? = nil,
         side: FrameSide? = nil,
         count: Int? = nil,
         bestPhoto: String? = nil
@@ -92,6 +96,7 @@ struct CullingReason: Codable, Sendable, Equatable {
         self.value = value
         self.threshold = threshold
         self.onSubject = onSubject
+        self.galleryShare = galleryShare
         self.side = side
         self.count = count
         self.bestPhoto = bestPhoto
@@ -106,11 +111,23 @@ extension CullingReason {
         switch kind {
         case .blurry:
             let measured = number(value, locale), limit = number(threshold, locale)
+            if let galleryShare {
+                let share = leastSharpShare(galleryShare, locale)
+                return onSubject == true
+                    ? String(localized: "Floue (netteté du sujet \(measured), parmi les \(share) les moins nettes)")
+                    : String(localized: "Floue (netteté de l'image \(measured), parmi les \(share) les moins nettes)")
+            }
             return onSubject == true
                 ? String(localized: "Floue (netteté du sujet \(measured) < \(limit))")
                 : String(localized: "Floue (netteté de l'image \(measured) < \(limit))")
         case .slightlyBlurry:
             let measured = number(value, locale), limit = number(threshold, locale)
+            if let galleryShare {
+                let share = leastSharpShare(galleryShare, locale)
+                return onSubject == true
+                    ? String(localized: "Légèrement floue (netteté du sujet \(measured), parmi les \(share) les moins nettes)")
+                    : String(localized: "Légèrement floue (netteté de l'image \(measured), parmi les \(share) les moins nettes)")
+            }
             return onSubject == true
                 ? String(localized: "Légèrement floue (netteté du sujet \(measured) < \(limit))")
                 : String(localized: "Légèrement floue (netteté de l'image \(measured) < \(limit))")
@@ -137,6 +154,8 @@ extension CullingReason {
             return String(localized: "Hautes lumières brûlées (\(percent(value, locale)) des pixels)")
         case .underexposed:
             return String(localized: "Sous-exposée (\(percent(value, locale)) de pixels noirs)")
+        case .nearlyBlack:
+            return String(localized: "Presque entièrement noire (\(percent(value, locale)) de pixels noirs)")
         case .eyesClosed:
             let faces = count ?? 1
             return faces == 1
@@ -163,6 +182,11 @@ extension CullingReason {
 
     private func number(_ value: Double, _ locale: Locale, digits: Int = 0) -> String {
         value.formatted(.number.precision(.fractionLength(digits)).locale(locale))
+    }
+
+    /// « 5 % », never « 0 % »: the photo itself is among them.
+    private func leastSharpShare(_ share: Double, _ locale: Locale) -> String {
+        percent(max(0.01, (share * 100).rounded(.up) / 100), locale)
     }
 
     private func percent(_ share: Double, _ locale: Locale, digits: Int = 0) -> String {

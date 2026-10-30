@@ -213,6 +213,7 @@ struct ViewerReasonLine: Equatable, Sendable {
         case .overexposed: return String(localized: "très surexposée")
         case .slightlyOverexposed: return String(localized: "zones claires brûlées")
         case .underexposed: return String(localized: "sous-exposée")
+        case .nearlyBlack: return String(localized: "presque entièrement noire")
         case .eyesClosed: return String(localized: "yeux fermés")
         case .lowAesthetics: return String(localized: "peu attrayante selon l'IA")
         case .utility: return String(localized: "photo utilitaire")

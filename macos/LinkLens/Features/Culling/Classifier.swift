@@ -19,14 +19,39 @@ struct CullingResult: Sendable, Equatable {
 }
 
 /// Turns measurements into Garder / À revoir / Rejeter, always with the reasons.
-/// Same rules as the validated LinkLensProbe prototype (without exact duplicates, which belong to F5).
+/// Exact duplicates are left to F5.
 enum Classifier {
+    /// Chronological order, bursts, then verdicts. Needs every photo of the gallery (bursts, and blur
+    /// is judged against the rest of the gallery), so it runs once the analysis is done.
+    static func classifyGallery(analyses: [PhotoAnalysis], failedPhotoIds: [UUID], thresholds: CullingThresholds) -> [CullingResult] {
+        // Chronological order (file name breaks ties: the A6000 has no sub-seconds).
+        let sorted = analyses.sorted { a, b in
+            let dateA = a.photo.captureDate ?? .distantFuture
+            let dateB = b.photo.captureDate ?? .distantFuture
+            if dateA != dateB { return dateA < dateB }
+            return a.photo.relativePath.localizedStandardCompare(b.photo.relativePath) == .orderedAscending
+        }
+        let bursts = BurstGrouper.group(
+            dates: sorted.map(\.photo.captureDate),
+            distance: { i, j in
+                guard let a = sorted[i].vision.featurePrint, let b = sorted[j].vision.featurePrint else { return nil }
+                return try? a.distance(to: b)
+            },
+            thresholds: thresholds
+        )
+        return classify(sorted, bursts: bursts, thresholds: thresholds)
+            + failedPhotoIds.map { failedResult(photoId: $0) }
+    }
+
     /// - Parameters:
     ///   - analyses: photos in chronological order.
     ///   - bursts: groups of indices into `analyses` (from `BurstGrouper`).
     /// - Returns: one result per analysis, in the same order.
     static func classify(_ analyses: [PhotoAnalysis], bursts: [[Int]], thresholds: CullingThresholds) -> [CullingResult] {
-        var reasons = analyses.map { photoReasons($0, thresholds) }
+        let gallery = GallerySharpness(analyses.map(\.sharpness))
+        // Each photo is first judged on its own flaws; a burst rank can only add to them
+        // (the best photo of a burst of black frames stays rejected).
+        var reasons = analyses.map { photoReasons($0, thresholds, gallery: gallery) }
         var burstNumbers = [Int?](repeating: nil, count: analyses.count)
         var bestOfBurst = [Bool](repeating: false, count: analyses.count)
 
@@ -91,24 +116,13 @@ enum Classifier {
 
     // MARK: - Per-photo criteria
 
-    static func photoReasons(_ analysis: PhotoAnalysis, _ t: CullingThresholds) -> [CullingReason] {
+    static func photoReasons(_ analysis: PhotoAnalysis, _ t: CullingThresholds, gallery: GallerySharpness? = nil) -> [CullingReason] {
         var reasons: [CullingReason] = []
-        let sharpness = analysis.sharpness.sharpness
-        let onSubject = analysis.sharpness.measuredOnSubject
-        if sharpness < t.blurReject {
-            reasons.append(CullingReason(kind: .blurry, verdict: .reject,
-                                         value: sharpness, threshold: t.blurReject, onSubject: onSubject))
-        } else if sharpness < t.blurReview {
-            reasons.append(CullingReason(kind: .slightlyBlurry, verdict: .review,
-                                         value: sharpness, threshold: t.blurReview, onSubject: onSubject))
+        if let blur = blurReason(analysis.sharpness, t, gallery: gallery) {
+            reasons.append(blur)
         }
-
-        if let subject = analysis.vision.subjectBox, let edge = closestEdge(of: subject, t) {
-            if edge.margin < t.subjectCutMargin {
-                reasons.append(CullingReason(kind: .subjectCut, verdict: .reject, value: edge.margin, side: edge.side))
-            } else if edge.margin < t.subjectTightMargin {
-                reasons.append(CullingReason(kind: .subjectTight, verdict: .review, value: edge.margin, side: edge.side))
-            }
+        if let cut = framingReason(analysis.vision.salientObjects, t) {
+            reasons.append(cut)
         }
 
         let highlights = analysis.exposure.highlightClipping
@@ -117,8 +131,11 @@ enum Classifier {
         } else if highlights > t.highlightReview {
             reasons.append(CullingReason(kind: .slightlyOverexposed, verdict: .review, value: highlights))
         }
-        if analysis.exposure.shadowClipping > t.shadowReview {
-            reasons.append(CullingReason(kind: .underexposed, verdict: .review, value: analysis.exposure.shadowClipping))
+        let shadows = analysis.exposure.shadowClipping
+        if shadows > t.shadowReject {
+            reasons.append(CullingReason(kind: .nearlyBlack, verdict: .reject, value: shadows))
+        } else if shadows > t.shadowReview {
+            reasons.append(CullingReason(kind: .underexposed, verdict: .review, value: shadows))
         }
 
         // Eyes are not validated on real portraits yet: "À revoir" at most.
@@ -136,19 +153,49 @@ enum Classifier {
         return reasons
     }
 
+    // MARK: - Blur
+
+    /// Blurry only when the score is low on its own AND among the lowest of the gallery: a clearly
+    /// blurry photo ("Rejeter") is under `blurReject` (`blurRejectWithoutSubject` without a subject),
+    /// in the least sharp `blurRejectGalleryShare`, and nothing around its subject is sharp either.
+    /// A photo with nothing to judge (black frame, empty sky) gets no blur verdict.
+    static func blurReason(_ sharpness: SharpnessMeasurement, _ t: CullingThresholds, gallery: GallerySharpness?) -> CullingReason? {
+        guard sharpness.isMeasurable, sharpness.sharpness < t.blurReview else { return nil }
+        let score = sharpness.sharpness
+        // nil when the gallery is too small to compare: the score alone decides.
+        let share = gallery.flatMap { $0.count >= t.blurMinGalleryForShare ? $0.shareBelow(score) : nil }
+        func isAmongLeastSharp(_ limit: Double) -> Bool { share.map { $0 <= limit } ?? true }
+
+        let rejectBelow = sharpness.measuredOnSubject ? t.blurReject : t.blurRejectWithoutSubject
+        if score < rejectBelow {
+            // A sharp photo around a blurry subject: the focus may be on purpose elsewhere. Let the user decide.
+            let isSharpElsewhere = sharpness.surroundingSharpness >= t.blurSharpAround
+            let verdict: CullingVerdict = isAmongLeastSharp(t.blurRejectGalleryShare) && !isSharpElsewhere ? .reject : .review
+            return CullingReason(kind: .blurry, verdict: verdict, value: score, threshold: rejectBelow,
+                                 onSubject: sharpness.measuredOnSubject, galleryShare: share)
+        }
+        guard isAmongLeastSharp(t.blurReviewGalleryShare) else { return nil }
+        return CullingReason(kind: .slightlyBlurry, verdict: .review, value: score, threshold: t.blurReview,
+                             onSubject: sharpness.measuredOnSubject, galleryShare: share)
+    }
+
     // MARK: - Framing
 
-    /// The image border closest to the subject, ignoring an axis where the subject fills the frame
-    /// (a close-up portrait legitimately touches the top and bottom).
-    static func closestEdge(of subject: CGRect, _ t: CullingThresholds) -> (side: FrameSide, margin: Double)? {
-        var margins: [(side: FrameSide, margin: Double)] = []
-        if subject.width <= t.framingMaxSubjectSize {
-            margins += [(.left, Double(subject.minX)), (.right, Double(1 - subject.maxX))]
-        }
-        if subject.height <= t.framingMaxSubjectSize {
-            margins += [(.top, Double(subject.minY)), (.bottom, Double(1 - subject.maxY))]
-        }
-        return margins.min { $0.margin < $1.margin }
+    /// "Sujet coupé" ("À revoir" only, never "Rejeter"): only for a small, isolated main subject that
+    /// touches the left or right border, like a car leaving the frame. A detail that fills the frame, or a
+    /// scene with several subjects (car show, people in front), is framed on purpose. The top and bottom
+    /// are not checked: there the box mostly meets the sky or a foreground (grass, spectators).
+    static func framingReason(_ objects: [SalientObject], _ t: CullingThresholds) -> CullingReason? {
+        guard let main = objects.first,
+              main.area <= t.framingMaxSubjectArea,
+              main.confidence >= t.framingMinConfidence,
+              main.box.width <= t.framingMaxSubjectWidth else { return nil }
+        let hasOtherSubject = objects.dropFirst().contains { $0.area >= main.area * t.framingOtherSubjectShare }
+        guard !hasOtherSubject else { return nil }
+        let left = Double(main.box.minX), right = Double(1 - main.box.maxX)
+        let (side, margin): (FrameSide, Double) = left <= right ? (.left, left) : (.right, right)
+        guard margin < t.subjectCutMargin else { return nil }
+        return CullingReason(kind: .subjectCut, verdict: .review, value: margin, side: side)
     }
 
     // MARK: - Burst score
@@ -189,5 +236,29 @@ enum Classifier {
         guard let maximum = present.max() else { return nil }
         guard maximum > 0 else { return values.map { _ in 1 } }
         return values.map { ($0 ?? 0) / maximum }
+    }
+}
+
+/// The sharpness scores of a whole gallery, to tell how a photo compares with the others.
+struct GallerySharpness: Sendable {
+    /// Measurable scores only, sorted from the least sharp.
+    private let sorted: [Double]
+
+    init(_ measurements: [SharpnessMeasurement]) {
+        sorted = measurements.filter(\.isMeasurable).map(\.sharpness).sorted()
+    }
+
+    var count: Int { sorted.count }
+
+    /// Share of the gallery (0…1) at most as sharp as `score`: 0.05 = among the 5 % least sharp.
+    func shareBelow(_ score: Double) -> Double {
+        guard !sorted.isEmpty else { return 0 }
+        // Binary search: index of the first score above `score`.
+        var low = 0, high = sorted.count
+        while low < high {
+            let middle = (low + high) / 2
+            if sorted[middle] <= score { low = middle + 1 } else { high = middle }
+        }
+        return Double(low) / Double(sorted.count)
     }
 }

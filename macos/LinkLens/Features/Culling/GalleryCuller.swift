@@ -48,7 +48,7 @@ struct GalleryCuller: Sendable {
         let (analyses, failures) = await analyze(contents.photos, in: folder, galleryId: galleryId, onProgress: onProgress)
         try Task.checkCancellation()
 
-        let results = Self.classify(analyses: analyses, failedPhotoIds: failures, thresholds: thresholds)
+        let results = Classifier.classifyGallery(analyses: analyses, failedPhotoIds: failures, thresholds: thresholds)
         // From here on the run is not cancelled any more: a few quick batches, so verdicts stay consistent.
         let analyzedAt = Date()
         for start in stride(from: 0, to: results.count, by: batchSize) {
@@ -119,35 +119,5 @@ struct GalleryCuller: Sendable {
             }
         }
         return (analyses, failures)
-    }
-
-    /// Chronological order, bursts, then verdicts. Needs every photo, so it runs once the analysis is done.
-    static func classify(analyses: [PhotoAnalysis], failedPhotoIds: [UUID], thresholds: CullingThresholds) -> [CullingResult] {
-        // Chronological order (file name breaks ties: the A6000 has no sub-seconds).
-        let sorted = analyses.sorted { a, b in
-            let dateA = a.photo.captureDate ?? .distantFuture
-            let dateB = b.photo.captureDate ?? .distantFuture
-            if dateA != dateB { return dateA < dateB }
-            return a.photo.relativePath.localizedStandardCompare(b.photo.relativePath) == .orderedAscending
-        }
-
-        // Comparisons between each photo and the next one.
-        var secondsApart: [Double?] = []
-        var distances: [Double?] = []
-        for (current, next) in zip(sorted, sorted.dropFirst()) {
-            if let a = current.photo.captureDate, let b = next.photo.captureDate {
-                secondsApart.append(b.timeIntervalSince(a))
-            } else {
-                secondsApart.append(nil)
-            }
-            if let a = current.vision.featurePrint, let b = next.vision.featurePrint {
-                distances.append(try? a.distance(to: b))
-            } else {
-                distances.append(nil)
-            }
-        }
-        let bursts = sorted.isEmpty ? [] : BurstGrouper.group(secondsApart: secondsApart, distances: distances, thresholds: thresholds)
-        return Classifier.classify(sorted, bursts: bursts, thresholds: thresholds)
-            + failedPhotoIds.map { Classifier.failedResult(photoId: $0) }
     }
 }

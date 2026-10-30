@@ -120,14 +120,14 @@ struct InspectorTextTests {
         let blurry = InspectorGauges.sharpness(thresholds.blurReject - 1, onSubject: true)
         let slightly = InspectorGauges.sharpness(thresholds.blurReject, onSubject: true)
         let sharp = InspectorGauges.sharpness(thresholds.blurReview, onSubject: true)
-        let verySharp = InspectorGauges.sharpness(158.4, onSubject: true, locale: french)
+        let verySharp = InspectorGauges.sharpness(85.9, onSubject: true, locale: french)
         #expect([blurry, slightly, sharp, verySharp].map(\.label) == ["Floue", "Légèrement floue", "Nette", "Très nette"])
         #expect([blurry, slightly, sharp, verySharp].map(\.tone) == [.reject, .review, .keep, .keep])
         // DSC04311: about 90 % of the bar (the mockup drew 88 %).
         #expect(abs(verySharp.fraction - 0.9) < 0.02)
         #expect(blurry.fraction < slightly.fraction && slightly.fraction < sharp.fraction)
         // The numbers stay in the tooltip.
-        #expect(verySharp.detail == "Netteté mesurée sur le sujet : 158 (floue sous 45, légèrement floue sous 65)")
+        #expect(verySharp.detail == "Netteté mesurée sur le sujet : 86 (floue sous 42, légèrement floue sous 50)")
         #expect(InspectorGauges.sharpness(5, onSubject: false).fraction > 0, "an empty bar would look broken")
         #expect(InspectorGauges.sharpness(900, onSubject: false).fraction == 1)
     }

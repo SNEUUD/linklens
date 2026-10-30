@@ -45,9 +45,9 @@ struct GalleryCullerTests {
         let broken = try #require(photos.first { $0.relativePath == "broken.ARW" })
         #expect(broken.cullingVerdict == .review)
         #expect(broken.cullingReasons.map(\.kind) == [.analysisFailed])
+        // A plain grey image has no edge at all: nothing to judge, so it is not called blurry.
         let flat = try #require(photos.first { $0.relativePath == "flat.jpg" })
-        #expect(flat.cullingVerdict == .reject)
-        #expect(flat.cullingReasons.first?.kind == .blurry)
+        #expect(!flat.cullingReasons.contains { $0.kind == .blurry || $0.kind == .slightlyBlurry })
     }
 
     @MainActor

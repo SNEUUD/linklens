@@ -36,11 +36,13 @@ struct EyeStateTests {
     }
 }
 
-@Suite("Blur (Laplacian variance)")
+@Suite("Blur (edge width, zone by zone)")
 struct SharpnessTests {
-    @Test func uniformImageHasNoSharpness() {
+    @Test func uniformImageHasNothingToJudge() {
         let flat = GrayImage(width: 64, height: 64, pixels: [UInt8](repeating: 128, count: 64 * 64))
-        #expect(Sharpness.measure(flat).sharpness == 0)
+        let result = Sharpness.measure(flat)
+        #expect(result.detailedZones == 0)
+        #expect(!result.isMeasurable)
     }
 
     @Test func blurLowersSharpness() {
@@ -49,12 +51,33 @@ struct SharpnessTests {
         let sharpValue = Sharpness.measure(sharp).sharpness
         let blurredValue = Sharpness.measure(blurred).sharpness
         #expect(sharpValue > CullingThresholds().blurReview)
-        #expect(blurredValue < sharpValue / 5)
+        #expect(blurredValue < CullingThresholds().blurReject)
     }
 
-    @Test func sharpTilesStandOutFromAFlatBackground() {
-        let result = Sharpness.measure(leftQuarterSharp())
-        #expect(result.tileSharpness > result.globalSharpness * 2)
+    @Test func largeUniformAreaDoesNotLowerTheScore() {
+        // A sharp car under a big empty sky: only the zones with edges are judged.
+        let board = checkerboard(width: 256, height: 256, square: 8)
+        var skyAndCar = GrayImage(width: 256, height: 256, pixels: [UInt8](repeating: 230, count: 256 * 256))
+        for y in 192..<256 { for x in 0..<256 { skyAndCar.pixels[y * 256 + x] = board.pixels[y * 256 + x] } }
+
+        let full = Sharpness.measure(board).sharpness
+        let mostlySky = Sharpness.measure(skyAndCar)
+        #expect(mostlySky.isMeasurable)
+        #expect(abs(mostlySky.sharpness - full) / full < 0.1)
+    }
+
+    @Test func contrastDoesNotChangeTheScore() {
+        // Same pattern, dark and low-contrast (like a black car) vs. bright and high-contrast.
+        let bright = Sharpness.measure(checkerboard(width: 128, height: 128, square: 8))
+        let dark = Sharpness.measure(checkerboard(width: 128, height: 128, square: 8, dark: 10, light: 50))
+        #expect(abs(dark.sharpness - bright.sharpness) / bright.sharpness < 0.05)
+    }
+
+    @Test func sidewaysMotionBlurIsCaughtThoughHorizontalEdgesStayCrisp() {
+        // Like DSC04317: a car moving sideways, the camera did not follow it.
+        let sharp = checkerboard(width: 128, height: 128, square: 8)
+        let moved = Sharpness.measure(horizontalBlur(sharp, radius: 3))
+        #expect(moved.sharpness < CullingThresholds().blurReject)
     }
 
     @Test func blurrySubjectInFrontOfASharpBackground() {
@@ -68,22 +91,16 @@ struct SharpnessTests {
         let onImage = Sharpness.measure(image)
         #expect(onSubject.measuredOnSubject && !onImage.measuredOnSubject)
         #expect(onSubject.sharpness < onImage.sharpness / 2)
+        // What is around the subject is sharp: the focus may have been put there on purpose.
+        #expect(onSubject.surroundingSharpness > CullingThresholds().blurSharpAround)
     }
 
-    @Test func contrastDoesNotChangeTheScore() {
-        // Same pattern, dark and low-contrast (like a black car) vs. bright and high-contrast.
-        let bright = Sharpness.measure(checkerboard(width: 128, height: 128, square: 8))
-        let dark = Sharpness.measure(checkerboard(width: 128, height: 128, square: 8, dark: 10, light: 50))
-        #expect(dark.globalSharpness < bright.globalSharpness / 10)
-        #expect(abs(dark.sharpness - bright.sharpness) / bright.sharpness < 0.05)
-    }
-
-    /// Left quarter: fine checkerboard; the rest: flat grey.
-    func leftQuarterSharp() -> GrayImage {
-        var image = GrayImage(width: 128, height: 128, pixels: [UInt8](repeating: 128, count: 128 * 128))
-        let board = checkerboard(width: 128, height: 128, square: 4)
-        for y in 0..<128 { for x in 0..<32 { image.pixels[y * 128 + x] = board.pixels[y * 128 + x] } }
-        return image
+    @Test func subjectWithoutDetailFallsBackOnTheWholeImage() {
+        var image = checkerboard(width: 128, height: 128, square: 8)
+        for y in 0..<64 { for x in 0..<64 { image.pixels[y * 128 + x] = 128 } }
+        let result = Sharpness.measure(image, subject: CGRect(x: 0, y: 0, width: 0.4, height: 0.4))
+        #expect(!result.measuredOnSubject)
+        #expect(result.isMeasurable)
     }
 }
 

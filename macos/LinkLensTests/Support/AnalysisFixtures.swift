@@ -3,6 +3,7 @@ import Foundation
 @testable import LinkLens
 
 /// Builds a PhotoAnalysis without running Vision, for pure-logic tests.
+/// `subject` becomes the main salient object (confidence 0.8); `others` are the other salient objects.
 func makeAnalysis(
     _ name: String,
     sharpness: Double = 120,
@@ -12,14 +13,21 @@ func makeAnalysis(
     shadows: Double = 0,
     faces: [FaceResult] = [],
     subject: CGRect? = CGRect(x: 0.3, y: 0.4, width: 0.4, height: 0.2),
+    subjectConfidence: Double = 0.8,
+    others: [SalientObject] = [],
+    detailedZones: Int = 20,
+    surroundingSharpness: Double = 0,
     date: Date? = nil
 ) -> PhotoAnalysis {
-    PhotoAnalysis(
+    let main = subject.map { [SalientObject(box: $0, confidence: subjectConfidence)] } ?? []
+    return PhotoAnalysis(
         photo: PhotoReference(id: UUID(), relativePath: name, captureDate: date),
-        vision: VisionMeasurement(aesthetics: aesthetics, isUtility: isUtility, faces: faces, featurePrint: nil, subjectBox: subject),
+        vision: VisionMeasurement(
+            aesthetics: aesthetics, isUtility: isUtility, faces: faces, featurePrint: nil, salientObjects: main + others
+        ),
         sharpness: SharpnessMeasurement(
             sharpness: sharpness, measuredOnSubject: subject != nil,
-            tileSharpness: sharpness, globalSharpness: sharpness
+            surroundingSharpness: surroundingSharpness, detailedZones: detailedZones
         ),
         exposure: ExposureMeasurement(highlightClipping: highlights, shadowClipping: shadows)
     )
@@ -58,6 +66,23 @@ func boxBlur(_ image: GrayImage, radius: Int) -> GrayImage {
                     sum += Int(image.pixels[sy * image.width + sx])
                     count += 1
                 }
+            }
+            output[y * image.width + x] = UInt8(sum / count)
+        }
+    }
+    return GrayImage(width: image.width, height: image.height, pixels: output)
+}
+
+/// Horizontal box blur only (radius in pixels), like a car moving sideways: vertical edges get wide,
+/// horizontal edges stay crisp.
+func horizontalBlur(_ image: GrayImage, radius: Int) -> GrayImage {
+    var output = image.pixels
+    for y in 0..<image.height {
+        for x in 0..<image.width {
+            var sum = 0, count = 0
+            for dx in -radius...radius where x + dx >= 0 && x + dx < image.width {
+                sum += Int(image.pixels[y * image.width + x + dx])
+                count += 1
             }
             output[y * image.width + x] = UInt8(sum / count)
         }

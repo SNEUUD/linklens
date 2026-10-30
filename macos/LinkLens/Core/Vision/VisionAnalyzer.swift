@@ -13,13 +13,26 @@ struct FaceResult: Sendable, Equatable {
     var eyesClosed: Bool?
 }
 
+/// One object that stands out in the photo (Vision "objectness" saliency).
+struct SalientObject: Sendable, Equatable, Codable {
+    /// Normalized (0…1), origin at the top-left.
+    var box: CGRect
+    /// Vision confidence (0…1).
+    var confidence: Double
+
+    var area: Double { Double(box.width * box.height) }
+}
+
 struct VisionMeasurement: Sendable {
     var aesthetics: Double?
     var isUtility: Bool?
     var faces: [FaceResult]
     var featurePrint: FeaturePrintObservation?
-    /// Main subject (union of Vision's salient objects), normalized with a top-left origin. Nil if none found.
-    var subjectBox: CGRect?
+    /// Every salient object Vision found, largest first.
+    var salientObjects: [SalientObject] = []
+
+    /// Main subject: the largest salient object, normalized with a top-left origin. Nil if none found.
+    var subjectBox: CGRect? { salientObjects.first?.box }
 }
 
 /// Runs the Vision requests on an upright image, using the Swift Vision API (macOS 15+).
@@ -53,7 +66,7 @@ enum VisionAnalyzer {
             isUtility: scores.isUtility,
             faces: faces,
             featurePrint: featurePrint,
-            subjectBox: subjectBox(from: saliency)
+            salientObjects: salientObjects(from: saliency)
         )
     }
 
@@ -61,17 +74,17 @@ enum VisionAnalyzer {
     /// saliency request as `analyze`, without the three others.
     static func subjectBox(of image: CGImage) async throws -> CGRect? {
         let saliency = try await ImageRequestHandler(image).perform(GenerateObjectnessBasedSaliencyImageRequest())
-        return subjectBox(from: saliency)
+        return salientObjects(from: saliency).first?.box
     }
 
-    /// "Objectness" saliency finds the objects that stand out (here: the car).
-    /// Several boxes are merged so a subject split in two still counts as one.
-    private static func subjectBox(from saliency: SaliencyImageObservation) -> CGRect? {
-        let union = saliency.salientObjects
-            .map(\.boundingBox.cgRect)
-            .reduce(CGRect.null) { $0.union($1) }
-        guard !union.isNull, union.width > 0, union.height > 0 else { return nil }
-        return topLeft(union)
+    /// "Objectness" saliency finds the objects that stand out (a car, a person, a wheel…).
+    /// They are kept apart, largest first: merging them made one huge "subject" out of a car show
+    /// and called it cut by the border.
+    static func salientObjects(from saliency: SaliencyImageObservation) -> [SalientObject] {
+        saliency.salientObjects
+            .map { SalientObject(box: topLeft($0.boundingBox.cgRect), confidence: Double($0.confidence)) }
+            .filter { $0.box.width > 0 && $0.box.height > 0 }
+            .sorted { $0.area > $1.area }
     }
 
     /// Vision uses a bottom-left origin; the rest of the app uses a top-left origin (like CSS).
