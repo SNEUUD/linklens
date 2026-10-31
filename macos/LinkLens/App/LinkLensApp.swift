@@ -16,6 +16,7 @@ struct LinkLensApp: App {
     @State private var availabilityMonitor: GalleryAvailabilityMonitor
     @State private var detailsController: DetailsBackfillController
     @State private var deletionController: GalleryDeletionController
+    @State private var photoDeletion: PhotoDeletionController
     /// The reviews of the « À revoir » photos, kept while the app runs (« Reprendre la revue »).
     @State private var reviewController = ReviewController()
 
@@ -63,10 +64,19 @@ struct LinkLensApp: App {
         // (which goes through every gallery). The import location is never put in the trash.
         let deletion = GalleryDeletionController(store: store)
         deletion.galleryAvailability = { availability.availability(of: $0) }
-        deletion.isBusy = { galleryId in
+        // Photos put in the trash from a gallery: the same rules, for the photos of one gallery.
+        let photoDeletion = PhotoDeletionController(store: store)
+        photoDeletion.galleryAvailability = { availability.availability(of: $0) }
+        photoDeletion.isBusy = { galleryId in
             folderImport.progress?.galleryId == galleryId || culling.isBusy(galleryId: galleryId)
                 || details.runningGalleryId == galleryId || export.progress?.galleryId == galleryId
                 || duplicates.isScanning || duplicates.isMovingFiles
+        }
+        _photoDeletion = State(initialValue: photoDeletion)
+        deletion.isBusy = { galleryId in
+            folderImport.progress?.galleryId == galleryId || culling.isBusy(galleryId: galleryId)
+                || details.runningGalleryId == galleryId || export.progress?.galleryId == galleryId
+                || duplicates.isScanning || duplicates.isMovingFiles || photoDeletion.progress?.galleryId == galleryId
         }
         deletion.protectedPaths = {
             let destination = cardImport.defaultDestination.map { FolderBookmark.canonicalPath(of: $0.url) }
@@ -85,12 +95,16 @@ struct LinkLensApp: App {
             details.fillPendingGalleries()
             monitor.start()
             availability.start()
-            // Thumbnails of galleries deleted before the last quit (or a crash): no undo is possible now.
+            // Thumbnails of galleries and photos deleted before the last quit (or a crash): no undo is
+            // possible now. The queue holds both (photo deletions under their own id).
             Task { await deletion.purgeLeftovers() }
-            // When the app quits, every undo ends: the thumbnails of deleted galleries go.
+            // When the app quits, every undo ends: the thumbnails of deleted galleries and photos go.
             NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
                 // The notification comes on the main thread (`queue: .main`): `assumeIsolated` tells Swift so.
-                MainActor.assumeIsolated { deletion.finishAllNow() }
+                MainActor.assumeIsolated {
+                    deletion.finishAllNow()
+                    photoDeletion.finishAllNow()
+                }
             }
         }
     }
@@ -107,6 +121,7 @@ struct LinkLensApp: App {
                 .environment(availabilityMonitor)
                 .environment(detailsController)
                 .environment(deletionController)
+                .environment(photoDeletion)
                 .environment(reviewController)
         }
         // Wide enough at first launch for every column of the photo table without scrolling sideways.

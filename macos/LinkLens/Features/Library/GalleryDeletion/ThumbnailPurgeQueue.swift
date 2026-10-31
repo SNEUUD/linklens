@@ -5,7 +5,9 @@ import Foundation
 /// end of the undo period, when the app quits, or at the next launch after a crash.
 ///
 /// Written to a small JSON file rather than kept in memory only, so a forced quit never leaves them
-/// in the cache forever. Used from the main actor only (`GalleryDeletionController`).
+/// in the cache forever. Used from the main actor only (`GalleryDeletionController`, and
+/// `PhotoDeletionController` for photos deleted inside a gallery: their key is then the deletion's own id,
+/// not a gallery's). `purgeLeftovers` at launch cleans both, never touching a photo still in the catalogue.
 struct ThumbnailPurgeQueue: Sendable {
     let fileURL: URL
 

@@ -20,6 +20,31 @@ struct GalleryMenuActions: Sendable {
     /// or the review is already shown.
     var reviewTitle = String(localized: "Revoir les photos à revoir…")
     var review: (@MainActor () -> Void)? = nil
+    /// « Supprimer les photos sélectionnées… »: the confirmation window for the selection. Nil while
+    /// nothing is selected or the photos cannot be deleted (`trashHelp` says why).
+    var trashSelection: (@MainActor () -> Void)? = nil
+    /// « Mettre les 26 photos rejetées à la corbeille… ». Nil when no photo is « Rejeter ».
+    var trashRejectedTitle = PhotoDeletionText.rejectedMenuTitle(count: 0)
+    var trashRejected: (@MainActor () -> Void)? = nil
+    var trashHelp = ""
+}
+
+/// Which deletion ⌘⌫ asks for: the selected photos while the grid or the table has the keyboard,
+/// otherwise the gallery (as before, e.g. after a click in the sidebar). The other item keeps its
+/// place in the menu, without the shortcut.
+enum DeleteShortcutTarget: Equatable {
+    case photos, gallery
+
+    init(photosHaveFocus: Bool) {
+        self = photosHaveFocus ? .photos : .gallery
+    }
+
+    static let shortcut = KeyboardShortcut(.delete, modifiers: .command)
+
+    /// The shortcut of each menu item: on one of them only.
+    func shortcut(for item: DeleteShortcutTarget) -> KeyboardShortcut? {
+        item == self ? Self.shortcut : nil
+    }
 }
 
 /// What the « Présentation » menu can do for the gallery in the front window: the verdict filters
@@ -40,6 +65,9 @@ extension FocusedValues {
     @Entry var galleryPresentation: GalleryPresentationActions?
     /// Set by `ContentView` once there is at least one gallery.
     @Entry var showDuplicates: MenuAction?
+    /// True while the grid or the table of photos has the keyboard (`focusedValue`, not
+    /// `focusedSceneValue`: only published by the focused view). Decides what ⌘⌫ deletes.
+    @Entry var photosHaveFocus: Bool?
 }
 
 /// One menu action, wrapped in a struct: a bare closure as a focused value makes SwiftUI refresh the
@@ -53,6 +81,7 @@ struct MenuAction: Sendable {
 struct GalleryMenuCommands: View {
     @FocusedValue(\.galleryMenuActions) private var actions
     @FocusedValue(\.showDuplicates) private var showDuplicates
+    @FocusedValue(\.photosHaveFocus) private var photosHaveFocus
 
     var body: some View {
         Button(actions?.cullTitle ?? String(localized: "Trier à nouveau")) { actions?.cull?() }
@@ -76,9 +105,18 @@ struct GalleryMenuCommands: View {
             .disabled(showDuplicates == nil)
             .help("Rechercher les fichiers identiques dans toutes vos galeries")
         Divider()
-        // ⌘⌫ (`.delete` is the ⌫ key). Always through the confirmation window: nothing is deleted at once.
+        // ⌘⌫ (`.delete` is the ⌫ key) goes to the photos when they have the keyboard, else to the gallery.
+        // Always through a confirmation window: nothing is deleted at once.
+        let target = DeleteShortcutTarget(photosHaveFocus: photosHaveFocus == true)
+        Button("Supprimer les photos sélectionnées…") { actions?.trashSelection?() }
+            .keyboardShortcut(target.shortcut(for: .photos))
+            .disabled(actions?.trashSelection == nil)
+            .help(actions?.trashHelp ?? "")
+        Button(actions?.trashRejectedTitle ?? PhotoDeletionText.rejectedMenuTitle(count: 0)) { actions?.trashRejected?() }
+            .disabled(actions?.trashRejected == nil)
+            .help("Les photos marquées Rejeter, par vous ou par l'IA, vont dans la corbeille du Finder. Vous pourrez annuler.")
         Button("Supprimer la galerie…") { actions?.delete?() }
-            .keyboardShortcut(.delete, modifiers: .command)
+            .keyboardShortcut(target.shortcut(for: .gallery))
             .disabled(actions?.delete == nil)
             .help(actions?.deleteHelp ?? "")
     }

@@ -7,6 +7,38 @@ struct TrashSelection: Sendable, Equatable {
     var trash: [DuplicateCopy]
 }
 
+/// A file's size and modification date: a cheap way to tell that a file is the same one, unchanged.
+struct FileStamp: Sendable, Equatable {
+    var size: Int64
+    var modifiedAt: Date?
+
+    /// Nil when there is no regular file there (missing, a folder, a link).
+    static func read(_ url: URL) -> FileStamp? {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]
+        guard let values = try? url.resourceValues(forKeys: keys),
+              values.isRegularFile == true, values.isSymbolicLink != true
+        else { return nil }
+        return FileStamp(size: Int64(values.fileSize ?? 0), modifiedAt: values.contentModificationDate)
+    }
+}
+
+/// What tells, before « Annuler » takes a file out of the trash, that it is the file LinkLens put there:
+/// once the trash is emptied, another file may get the same name there.
+enum TrashFingerprint: Sendable, Equatable {
+    /// F5: the duplicates' SHA-256, already computed by the search.
+    case sha256(String)
+    /// Photos put in the trash from a gallery: size and modification date, read right before the move
+    /// (hashing a thousand RAW files of 25 Mo would take minutes; moving a file keeps both).
+    case stamp(FileStamp)
+
+    func matches(_ url: URL) -> Bool {
+        switch self {
+        case .sha256(let expected): (try? VerifiedCopier.sha256(of: url)) == expected
+        case .stamp(let expected): FileStamp.read(url) == expected
+        }
+    }
+}
+
 /// A copy now in the trash, with all it takes to put it back.
 struct TrashedFile: Sendable, Equatable {
     var galleryId: UUID
@@ -14,8 +46,7 @@ struct TrashedFile: Sendable, Equatable {
     var photo: PhotoSnapshot
     /// Where the Finder put it, as returned by `FileManager.trashItem`.
     var trashURL: URL
-    /// Fingerprint of the file: once the trash is emptied, another file may get the same name there.
-    var sha256: String
+    var fingerprint: TrashFingerprint
 }
 
 /// Why one file was left where it was. Nothing is moved unless every check passes.
@@ -31,6 +62,11 @@ enum TrashSkipReason: Sendable, Equatable {
     case notInTrash
     /// "Annuler": a file with that name is back at the original place.
     case nameTaken
+    /// The trash said no (some disks have none: exFAT or FAT memory cards, network volumes). The file
+    /// stayed where it was: LinkLens never deletes it for good instead.
+    case trashRefused(String)
+    /// A photo's file is not where it should be inside the gallery's folder (a link leading elsewhere).
+    case outsideGallery
     case failed(String)
 
     var message: String {
@@ -42,6 +78,9 @@ enum TrashSkipReason: Sendable, Equatable {
         case .noWriteAccess: String(localized: "LinkLens n'a pas l'autorisation de modifier ce dossier.")
         case .notInTrash: String(localized: "Le fichier n'est plus dans la corbeille.")
         case .nameTaken: String(localized: "Un autre fichier porte déjà ce nom à cet endroit.")
+        // The system's message ends with a full stop: dropped inside the brackets.
+        case .trashRefused(let reason): String(localized: "La corbeille a refusé ce fichier (\(reason.trimmingCharacters(in: CharacterSet(charactersIn: ". ")))). Il est resté à sa place.")
+        case .outsideGallery: String(localized: "Ce fichier n'est pas dans le dossier de la galerie : il n'a pas été touché.")
         case .failed(let reason): reason
         }
     }
@@ -164,13 +203,13 @@ struct DuplicateTrasher: Sendable {
         }
         let snapshotsById = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.id, $0) })
         let trashed = moved.compactMap { copy, trashURL, sha256 in
-            snapshotsById[copy.photoId].map { TrashedFile(galleryId: copy.galleryId, photo: $0, trashURL: trashURL, sha256: sha256) }
+            snapshotsById[copy.photoId].map { TrashedFile(galleryId: copy.galleryId, photo: $0, trashURL: trashURL, fingerprint: .sha256(sha256)) }
         }
         return TrashOutcome(trashed: trashed, skipped: skipped)
     }
 
     /// "Annuler": takes the files out of the trash, back to their place, and restores their photos.
-    /// A file is never put back over another one.
+    /// A file is never put back over another one. Also used for the photos put in the trash from a gallery.
     @concurrent
     func restore(
         _ files: [TrashedFile],
@@ -189,9 +228,7 @@ struct DuplicateTrasher: Sendable {
             }
             let destination = folder.appending(path: file.photo.relativePath)
             // Same name is not enough: the trash may have been emptied and another file put there since.
-            guard FileManager.default.fileExists(atPath: file.trashURL.path),
-                  (try? VerifiedCopier.sha256(of: file.trashURL)) == file.sha256
-            else {
+            guard FileManager.default.fileExists(atPath: file.trashURL.path), file.fingerprint.matches(file.trashURL) else {
                 skip(.notInTrash)
                 continue
             }

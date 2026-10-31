@@ -12,6 +12,8 @@ struct VerdictFilterBar: View {
     /// « Revoir les 14 » or « Reprendre la revue (reste 9) »; nil when nothing is « À revoir ».
     var review: ReviewEntryPoint? = nil
     var onReview: () -> Void = {}
+    /// « Mettre les 26 photos rejetées à la corbeille… », shown under the « Rejeter » filter only.
+    var trashRejected: TrashRejectedAction? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -21,7 +23,13 @@ struct VerdictFilterBar: View {
             VerdictFilterCapsule(filter: filter, counts: counts, onSelect: onSelect)
                 .layoutPriority(1)
             Spacer(minLength: 0)
-            if let review {
+            if filter == .reject, let trashRejected, trashRejected.count > 0 {
+                ViewThatFits(in: .horizontal) {
+                    trashTrailing(trashRejected, isCompact: false, showsSlider: true)
+                    trashTrailing(trashRejected, isCompact: false, showsSlider: false)
+                    trashTrailing(trashRejected, isCompact: true, showsSlider: false)
+                }
+            } else if let review {
                 // `ViewThatFits` shows the first version that fits the width left by the filters (like a
                 // series of CSS container queries): the review button shrinks first, then the slider
                 // gives way to it (⌘+ / ⌘− still resize the thumbnails).
@@ -38,6 +46,25 @@ struct VerdictFilterBar: View {
         .padding(.horizontal, GridLayout.padding)
         .padding(.top, 8)
         .padding(.bottom, 4)
+    }
+
+    private func trashTrailing(_ action: TrashRejectedAction, isCompact: Bool, showsSlider: Bool) -> some View {
+        HStack(spacing: 12) {
+            Button(role: .destructive, action: action.perform) {
+                if isCompact {
+                    Label(String(localized: "Corbeille (\(action.count))…"), systemImage: "trash")
+                } else {
+                    Label(PhotoDeletionText.rejectedMenuTitle(count: action.count), systemImage: "trash")
+                }
+            }
+            .buttonStyle(.capsule(.destructive, size: .small))
+            .lineLimit(1)
+            .help("Les photos de ce filtre vont dans la corbeille du Finder, après confirmation. Vous pourrez annuler.")
+            .accessibilityLabel(Text(verbatim: PhotoDeletionText.rejectedMenuTitle(count: action.count)))
+            if showsSlider, let thumbnailWidth {
+                ThumbnailSizeSlider(width: thumbnailWidth)
+            }
+        }
     }
 
     private func trailing(_ review: ReviewEntryPoint, style: ReviewEntryButton.Style, showsSlider: Bool) -> some View {

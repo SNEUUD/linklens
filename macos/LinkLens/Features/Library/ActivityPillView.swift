@@ -96,6 +96,7 @@ private struct ActivityRow: View {
     private var symbolName: String {
         switch activity.kind {
         case .indexing: "folder"
+        case .photoTrash: "trash"
         case .culling: "wand.and.stars"
         case .export: "square.and.arrow.up"
         case .exportFinished: activity.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
@@ -110,6 +111,7 @@ private struct ActivityRow: View {
         case .culling: String(localized: "Arrêter le tri. Les verdicts précédents sont gardés.")
         case .export: String(localized: "Arrêter l'export. Les photos déjà exportées sont gardées.")
         case .details: String(localized: "Arrêter. L'inspecteur montrera moins de détails pour les photos pas encore lues ; reprise au prochain lancement.")
+        case .photoTrash: String(localized: "Arrêter après le fichier en cours. Les photos déjà mises à la corbeille restent annulables (⌘Z).")
         case .exportFinished, .duplicates: String(localized: "Arrêter")
         }
     }

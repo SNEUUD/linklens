@@ -16,6 +16,8 @@ struct Activity: Identifiable, Equatable, Sendable {
         case duplicates
         /// Inspector details of photos sorted before they were stored (`DetailsBackfiller`).
         case details
+        /// Photos of the gallery going to the trash (`PhotoDeletionController`).
+        case photoTrash
     }
 
     var kind: Kind
@@ -102,6 +104,13 @@ extension Activity {
         )
     }
 
+    static func photoTrash(_ progress: PhotoTrashProgress) -> Activity {
+        Activity(
+            kind: .photoTrash, title: String(localized: "Mise à la corbeille"),
+            completed: progress.completed, total: progress.total, date: progress.startedAt
+        )
+    }
+
     static func details(_ progress: DetailsProgress?, startedAt: Date) -> Activity {
         Activity(
             kind: .details, title: String(localized: "Lecture des détails des photos"),
@@ -136,6 +145,7 @@ enum ActivityPill {
 
     private static func priority(_ kind: Activity.Kind) -> Int {
         switch kind {
+        case .photoTrash: 0
         case .export: 0
         case .culling: 1
         case .indexing: 2

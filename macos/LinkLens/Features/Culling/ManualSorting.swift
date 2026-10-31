@@ -112,10 +112,16 @@ final class ManualSorter {
     }
 
     /// A key: sorts the selected photo (the cover of a collapsed burst), then selects the next one
-    /// when `advance` is true. Returns false when nothing is selected.
+    /// when `advance` is true. With several photos selected, sorts them all in one step (one ⌘Z undoes
+    /// it) and stays on them. Returns false when nothing is selected.
     @discardableResult
     func applyToSelection(_ command: SortingCommand, advance: Bool) -> Bool {
-        guard let browser, let photoId = browser.selection else { return false }
+        guard let browser else { return false }
+        if browser.isMultipleSelection {
+            apply(command, to: browser.orderedSelection)
+            return true
+        }
+        guard let photoId = browser.selection else { return false }
         apply(command, to: [photoId])
         if advance {
             browser.showNeighbour(offset: 1)
@@ -203,10 +209,11 @@ final class ManualSorter {
 
     // MARK: - Best photo of a burst (F4)
 
-    /// B key: the selected photo becomes the best of its burst. Returns false outside a burst.
+    /// B key: the selected photo becomes the best of its burst. Returns false outside a burst, and with
+    /// several photos selected (one best photo per burst: which one would be ambiguous).
     @discardableResult
     func chooseSelectedBurstCover() -> Bool {
-        guard let browser, let photoId = browser.selection, browser.selectedEntry?.burst != nil else { return false }
+        guard let browser, !browser.isMultipleSelection, let photoId = browser.selection, browser.selectedEntry?.burst != nil else { return false }
         chooseBurstCover(photoId)
         return true
     }
@@ -316,8 +323,12 @@ final class ManualSorter {
         AccessibilityNotification.Announcement(message).post()
     }
 
-    /// VoiceOver says the new verdict, e.g. « DSC04297.ARW : Garder, votre choix ».
+    /// VoiceOver says the new verdict, e.g. « DSC04297.ARW : Garder, votre choix », « 12 photos : Rejeter ».
     private func announce(_ photos: [Photo]) {
+        if photos.count > 1, let verdict = photos.first?.verdict {
+            AccessibilityNotification.Announcement(String(localized: "\(photos.count) photos : \(verdict.label)")).post()
+            return
+        }
         guard photos.count == 1, let photo = photos.first, let description = photo.verdictDescription else { return }
         // Like an `aria-live` region: VoiceOver reads the text without moving its cursor.
         AccessibilityNotification.Announcement("\(photo.fileName) : \(description)").post()

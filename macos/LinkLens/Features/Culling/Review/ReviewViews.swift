@@ -18,8 +18,10 @@ struct ReviewModeView: View {
     let onClose: () -> Void
     /// « Revoir les N restantes » at the end: a new review of the photos still « À revoir ».
     let onReviewRemaining: () -> Void
-    /// Batch 3: « Mettre les N rejetées à la corbeille… ». Nil hides the button: nothing is deleted yet.
-    var onTrashRejected: ((Int) -> Void)? = nil
+    /// « Mettre les N photos rejetées à la corbeille… » at the end, N = every photo of the gallery shown
+    /// as « Rejeter » (not only those of the review: the same set as the « Galerie » menu and the
+    /// « Rejeter » filter). Nil hides the button (no rejected photo, disk unplugged…).
+    var trashRejected: TrashRejectedAction? = nil
 
     /// Shared by both photos of a burst: Z zooms both, a drag moves both.
     @State private var zoom = ViewerZoom()
@@ -39,7 +41,7 @@ struct ReviewModeView: View {
                     summary: session.summary,
                     onClose: onClose,
                     onReviewRemaining: onReviewRemaining,
-                    onTrashRejected: onTrashRejected
+                    trashRejected: trashRejected
                 )
             }
         }
@@ -688,13 +690,19 @@ private struct ReviewSortingBar: View {
 
 // MARK: - Summary
 
+/// « Mettre les N photos rejetées à la corbeille… »: how many, and what opens the confirmation window.
+struct TrashRejectedAction {
+    var count: Int
+    var perform: () -> Void
+}
+
 /// The end of the review: what became of the photos that were « À revoir ».
 struct ReviewSummaryView: View {
     let summary: ReviewSummary
     let onClose: () -> Void
     let onReviewRemaining: () -> Void
-    /// Batch 3 (nil until then: the button is hidden).
-    var onTrashRejected: ((Int) -> Void)?
+    /// Nil hides the button.
+    var trashRejected: TrashRejectedAction?
 
     var body: some View {
         VStack(spacing: 22) {
@@ -730,13 +738,12 @@ struct ReviewSummaryView: View {
                 }
                 .buttonStyle(.capsule(.prominent))
             }
-            if let onTrashRejected, summary.rejected > 0 {
-                Button(role: .destructive) {
-                    onTrashRejected(summary.rejected)
-                } label: {
-                    Text(summary.rejected > 1 ? "Mettre les \(summary.rejected) rejetées à la corbeille…" : "Mettre la rejetée à la corbeille…")
+            if let trashRejected, trashRejected.count > 0 {
+                Button(role: .destructive, action: trashRejected.perform) {
+                    Label(PhotoDeletionText.rejectedMenuTitle(count: trashRejected.count), systemImage: "trash")
                 }
                 .buttonStyle(.capsule(.destructive))
+                .help("Toutes les photos de la galerie marquées Rejeter, par vous ou par l'IA. Une fenêtre demande confirmation ; vous pourrez annuler.")
             }
             Text("← : revenir à la dernière rafale · ⌘Z : annuler la dernière décision")
                 .font(.system(size: 11.5))

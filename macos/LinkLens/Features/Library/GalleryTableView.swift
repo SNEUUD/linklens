@@ -4,14 +4,18 @@ import SwiftUI
 /// A collapsed burst is one row (its best photo); the chevron of the "Rafale" column or S opens it,
 /// B chooses its best photo (F4).
 /// P / U / X sort the selected photo by hand and go to the next row; A goes back to the AI's proposal.
+/// Several rows: ⌘-click, ⇧-click, ⇧ + arrows, ⌘A (handled by the table itself); Escape selects nothing.
 struct GalleryTableView: View {
     let rows: [DisplayedPhoto]
-    // `@Bindable` gives two-way bindings (`$browser.selection`) to an `@Observable` object.
+    // `@Bindable` gives two-way bindings (`$browser.tableSelection`) to an `@Observable` object.
     @Bindable var browser: GalleryBrowser
     let sorter: ManualSorter
+    /// « Mettre à la corbeille… » of the context menu, with the rows it is about. Nil hides it.
+    var onTrash: (([UUID]) -> Void)? = nil
 
     var body: some View {
-        Table(rows, selection: $browser.selection) {
+        // A `Set` as selection lets the table select several rows, with the usual Mac clicks and keys.
+        Table(rows, selection: $browser.tableSelection) {
             // The table resizes every column together: the others are capped (`max`) so that
             // "Raison" takes the remaining space. The window minimum width is the sum of the `min`s.
             TableColumn("Fichier") { row in
@@ -24,6 +28,9 @@ struct GalleryTableView: View {
                         SortingButtons { command in sorter.apply(command, to: [row.photo.id]) }
                         if let burst = row.entry.burst {
                             BurstCoverButtons(burst: burst) { command in sorter.apply(command, to: row.photo.id) }
+                        }
+                        if let onTrash {
+                            Button(PhotoDeletionText.trashMenuTitle(count: 1)) { onTrash([row.photo.id]) }
                         }
                     }
             }
@@ -68,16 +75,36 @@ struct GalleryTableView: View {
         // Right-click: sort the clicked row by hand. Double-click or Return open the viewer.
         .contextMenu(forSelectionType: UUID.self) { ids in
             if !ids.isEmpty {
-                SortingButtons(showsKeys: true) { command in sorter.apply(command, to: Array(ids)) }
+                // In display order, so the confirmation shows the photos as the table does.
+                let ordered = rows.map(\.id).filter(ids.contains)
+                if ids.count > 1 {
+                    Text("\(ids.count) photos sélectionnées")
+                }
+                SortingButtons(showsKeys: true) { command in sorter.apply(command, to: ordered) }
                 // The best photo of a burst: one row at a time.
                 if ids.count == 1, let row = rows.first(where: { ids.contains($0.id) }), let burst = row.entry.burst {
                     Divider()
                     BurstCoverButtons(burst: burst, showsKeys: true) { command in sorter.apply(command, to: row.photo.id) }
+                    if !burst.isShownAlone {
+                        Button("Sélectionner toute la rafale") { browser.selectWholeBurst(burst.number) }
+                    }
+                }
+                if let onTrash {
+                    Divider()
+                    Button(PhotoDeletionText.trashMenuTitle(count: ids.count), systemImage: "trash", role: .destructive) {
+                        onTrash(ordered)
+                    }
                 }
             }
         } primaryAction: { ids in
-            if let id = ids.first { browser.openViewer(on: id) }
+            // Several rows (Return): the current one. A `Set` has no order.
+            if let id = ids.count == 1 ? ids.first : browser.selection { browser.openViewer(on: id) }
         }
+        .onKeyPress(.escape) {
+            browser.clearSelection() ? .handled : .ignored
+        }
+        // Tells the menu bar that the photos have the keyboard: ⌘⌫ then deletes the selected rows.
+        .focusedValue(\.photosHaveFocus, true)
         .onKeyPress(.space) {
             browser.openViewer() ? .handled : .ignored
         }

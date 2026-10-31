@@ -36,6 +36,7 @@ struct GalleryDetailView: View {
     @Environment(GalleryAvailabilityMonitor.self) private var availabilityMonitor
     @Environment(DetailsBackfillController.self) private var detailsController
     @Environment(ReviewController.self) private var reviewController
+    @Environment(PhotoDeletionController.self) private var photoDeletion
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
     @Query private var photos: [Photo]
@@ -113,7 +114,8 @@ struct GalleryDetailView: View {
                     onSelect: selectFilter,
                     thumbnailWidth: showsGrid ? $thumbnailWidth : nil,
                     review: reviewEntryPoint,
-                    onReview: openReview
+                    onReview: openReview,
+                    trashRejected: trashRejectedAction
                 )
             }
             content
@@ -136,17 +138,32 @@ struct GalleryDetailView: View {
         // `.inspector` adds a panel on the right that the user shows or hides (macOS 14+), like the
         // inspectors of Xcode or Pages. Its state is the stored `isInspectorShown`, shared with the
         // toolbar button and the « Présentation » menu (⌥⌘I).
-        .inspector(isPresented: $isInspectorShown) {
-            PhotoInspector(
-                photo: inspectedPhoto,
-                burstMembers: inspectedBurstMembers,
-                loader: loader,
-                canUseOriginals: availability.canUseOriginals,
-                onSort: { command in
-                    guard let photoId = inspectedPhoto?.id else { return }
-                    sorter.apply(command, to: [photoId])
+        // Hidden over the review's summary, which shows no photo (the stored choice is left as it is).
+        .inspector(isPresented: Binding(
+            get: { isInspectorShown && !isReviewSummaryShown },
+            set: { if !isReviewSummaryShown { isInspectorShown = $0 } }
+        )) {
+            Group {
+                if !isFullWindow, browser.isMultipleSelection {
+                    PhotoSelectionSummary(
+                        photos: selectedPhotos,
+                        loader: loader,
+                        onTrash: canTrashSelection ? { requestTrash(browser.orderedSelection) } : nil,
+                        trashHelp: trashHelp
+                    )
+                } else {
+                    PhotoInspector(
+                        photo: inspectedPhoto,
+                        burstMembers: inspectedBurstMembers,
+                        loader: loader,
+                        canUseOriginals: availability.canUseOriginals,
+                        onSort: { command in
+                            guard let photoId = inspectedPhoto?.id else { return }
+                            sorter.apply(command, to: [photoId])
+                        }
+                    )
                 }
-            )
+            }
             .inspectorColumnWidth(min: 280, ideal: 340, max: 440)
         }
         // VoiceOver says when something starts or ends, like an `aria-live` region.
@@ -154,6 +171,10 @@ struct GalleryDetailView: View {
             for activity in activities where !old.contains(activity.kind) {
                 AccessibilityNotification.Announcement(activity.title).post()
             }
+        }
+        // VoiceOver says how many photos are selected when there are several.
+        .onChange(of: browser.selectedIds.count) { _, count in
+            if count > 1 { AccessibilityNotification.Announcement(PhotoDeletionText.selectedTitle(count: count)).post() }
         }
         // In the viewer, the window's title is the photo's name and its subtitle says where it is.
         .navigationTitle(windowTitle)
@@ -273,7 +294,8 @@ struct GalleryDetailView: View {
         InspectorToggle(isOn: $isInspectorShown)
     }
 
-    /// The review's top bar: « ‹ Terminer » (Escape) before the title, the inspector on the right.
+    /// The review's top bar: « ‹ Terminer » (Escape) before the title, the inspector on the right (not
+    /// over the summary, where it is hidden).
     @ToolbarContentBuilder private var reviewToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             Button(action: closeReview) {
@@ -282,7 +304,9 @@ struct GalleryDetailView: View {
             .labelStyle(.titleAndIcon)
             .help("Quitter la revue (Échap). « Reprendre la revue » vous ramène ici.")
         }
-        InspectorToggle(isOn: $isInspectorShown)
+        if !isReviewSummaryShown {
+            InspectorToggle(isOn: $isInspectorShown)
+        }
     }
 
     /// The photo shown by the viewer, nil while it is closed.
@@ -313,6 +337,11 @@ struct GalleryDetailView: View {
 
     private var isReviewOpen: Bool {
         reviewSession?.isOpen == true
+    }
+
+    /// The review reached its summary: no photo to inspect.
+    private var isReviewSummaryShown: Bool {
+        isReviewOpen && reviewSession?.isFinished == true
     }
 
     /// The viewer or the review takes the whole window (sidebar, filters and pill hidden).
@@ -385,6 +414,14 @@ struct GalleryDetailView: View {
         var review: (@MainActor () -> Void)?
         let entryPoint = reviewEntryPoint
         if entryPoint != nil, !isReviewOpen, !isExportSheetPresented { review = { openReview() } }
+        // The selection: not over the full-window viewer or review, where it is not shown.
+        var trashSelection: (@MainActor () -> Void)?
+        if canTrashSelection, !browser.selectedIds.isEmpty {
+            let ids = browser.orderedSelection
+            trashSelection = { requestTrash(ids) }
+        }
+        var trashRejected: (@MainActor () -> Void)?
+        if let action = trashRejectedAction { trashRejected = { action.perform() } }
         let defaultCullHelp = String(localized: "Proposer Garder, À revoir ou Rejeter pour chaque photo. Rien n'est supprimé.")
         let defaultExportHelp = String(localized: "Enregistrer des photos en JPEG, HEIC ou TIFF dans le dossier de votre choix. Les originaux ne sont pas modifiés.")
         let defaultRevealHelp = String(localized: "Afficher le dossier de la galerie dans le Finder")
@@ -399,8 +436,57 @@ struct GalleryDetailView: View {
             delete: delete,
             deleteHelp: deleteHelp,
             reviewTitle: entryPoint?.menuTitle ?? String(localized: "Revoir les photos à revoir…"),
-            review: review
+            review: review,
+            trashSelection: trashSelection,
+            trashRejectedTitle: PhotoDeletionText.rejectedMenuTitle(count: filterCounts.reject),
+            trashRejected: trashRejected,
+            trashHelp: trashHelp
         )
+    }
+
+    // MARK: - Photos to the trash
+
+    /// Whether photos of this gallery can be deleted now (disk plugged in, nothing running on it, no
+    /// other window open).
+    private var canDeletePhotos: Bool {
+        !isExportSheetPresented && photoDeletion.canRequest(galleryId: gallery.id)
+    }
+
+    private var canTrashSelection: Bool {
+        canDeletePhotos && !isFullWindow
+    }
+
+    private var trashHelp: String {
+        if let reason = photoDeletion.blockReason(galleryId: gallery.id) { return reason }
+        if browser.selectedIds.isEmpty { return String(localized: "Sélectionnez d'abord des photos (⌘-clic, ⇧-clic, ⌘A).") }
+        return String(localized: "Mettre les photos sélectionnées dans la corbeille du Finder, après confirmation. Vous pourrez annuler.")
+    }
+
+    /// « Mettre les 26 photos rejetées à la corbeille… »: nil when no photo is « Rejeter » or it is not possible now.
+    private var trashRejectedAction: TrashRejectedAction? {
+        let count = filterCounts.reject
+        guard count > 0, canDeletePhotos else { return nil }
+        return TrashRejectedAction(count: count) { requestTrashRejected() }
+    }
+
+    /// The confirmation window for these photos (display order kept).
+    private func requestTrash(_ photoIds: [UUID]) {
+        let byId = Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let items = photoIds.compactMap { byId[$0]?.trashItem }
+        photoDeletion.requestDeletion(
+            PhotoDeletionRequest(galleryId: gallery.id, galleryName: gallery.name, kind: .selection, items: items),
+            undoManager: undoManager
+        )
+    }
+
+    private func requestTrashRejected() {
+        photoDeletion.requestDeletion(.rejected(in: gallery, photos: photos), undoManager: undoManager)
+    }
+
+    /// The selected photos, in display order (the inspector's summary).
+    private var selectedPhotos: [Photo] {
+        let byId = Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return browser.orderedSelection.compactMap { byId[$0] }
     }
 
     /// The photo the inspector shows: the selection of the grid, the table or the viewer (for a collapsed
@@ -473,6 +559,9 @@ struct GalleryDetailView: View {
         if detailsController.runningGalleryId != nil {
             activities.append(.details(detailsController.progress, startedAt: detailsController.startedAt ?? .distantPast))
         }
+        if let progress = photoDeletion.progress, progress.galleryId == galleryId {
+            activities.append(.photoTrash(progress))
+        }
         return activities
     }
 
@@ -485,6 +574,7 @@ struct GalleryDetailView: View {
         case .exportFinished: exportController.dismissSummary()
         case .duplicates: duplicatesController.cancelScan()
         case .details: detailsController.cancel()
+        case .photoTrash: photoDeletion.cancelTrashing()
         }
     }
 
@@ -508,7 +598,8 @@ struct GalleryDetailView: View {
                 sorter: sorter,
                 availability: availability,
                 onClose: closeReview,
-                onReviewRemaining: reviewRemaining
+                onReviewRemaining: reviewRemaining,
+                trashRejected: trashRejectedAction
             )
             // A new review is a new view: its key handlers and zoom start afresh.
             .id(ObjectIdentifier(session))
@@ -526,10 +617,11 @@ struct GalleryDetailView: View {
                     rows: rows, loader: loader, browser: browser, sorter: sorter,
                     canUseOriginals: availability.canUseOriginals,
                     cellAspectRatio: cellAspectRatio,
-                    minimumCellWidth: thumbnailWidth
+                    minimumCellWidth: thumbnailWidth,
+                    onTrash: canTrashSelection ? { requestTrash($0) } : nil
                 )
             case .table:
-                GalleryTableView(rows: rows, browser: browser, sorter: sorter)
+                GalleryTableView(rows: rows, browser: browser, sorter: sorter, onTrash: canTrashSelection ? { requestTrash($0) } : nil)
             }
         }
     }

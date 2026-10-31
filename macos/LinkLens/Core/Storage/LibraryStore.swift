@@ -277,6 +277,48 @@ actor LibraryStore {
         try modelContext.save()
     }
 
+    // MARK: - Photos put in the trash from a gallery
+
+    /// When the gallery was last sorted by the AI: a new sorting renumbers the bursts, so « Annuler »
+    /// only gives a burst its former best photo back if no sorting happened since.
+    func culledAt(galleryId: UUID) throws -> Date? {
+        try fetchGallery(id: galleryId).culledAt
+    }
+
+    /// After photos left the gallery: each of these bursts that has no best photo of the AI any more
+    /// gets a new one (`BurstStacks.nextCover`), so its stack still shows a starred photo.
+    /// Returns the photos promoted by burst number, to take the star back on « Annuler ».
+    func promoteBurstCovers(galleryId: UUID, burstNumbers: Set<Int>) throws -> [Int: UUID] {
+        guard !burstNumbers.isEmpty else { return [:] }
+        let photos = try modelContext.fetch(FetchDescriptor<Photo>(
+            predicate: #Predicate { $0.gallery?.id == galleryId && $0.burstNumber != nil },
+            sortBy: [SortDescriptor(\.captureDate), SortDescriptor(\.relativePath)]
+        ))
+        var promoted: [Int: UUID] = [:]
+        for number in burstNumbers.sorted() {
+            let members = photos.filter { $0.burstNumber == number }
+            guard !members.isEmpty, !members.contains(where: \.isBestOfBurst) else { continue }
+            let candidates = members.map {
+                BurstStacks.CoverCandidate(id: $0.id, verdict: $0.verdict, aesthetics: $0.aestheticsScore, sharpness: $0.sharpness)
+            }
+            guard let id = BurstStacks.nextCover(among: candidates), let photo = members.first(where: { $0.id == id }) else { continue }
+            photo.isBestOfBurst = true
+            promoted[number] = id
+        }
+        if !promoted.isEmpty { try modelContext.save() }
+        return promoted
+    }
+
+    /// « Annuler »: the photos promoted by `promoteBurstCovers` lose their star again, unless the gallery
+    /// was sorted again since (`culledAt` changed: the stars are then the new sorting's).
+    func demoteBurstCovers(ids: [UUID], galleryId: UUID, ifCulledAt culledAt: Date?) throws {
+        guard !ids.isEmpty, try fetchGallery(id: galleryId).culledAt == culledAt else { return }
+        for photo in try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) })) {
+            photo.isBestOfBurst = false
+        }
+        try modelContext.save()
+    }
+
     private func fetchGallery(id: UUID) throws -> Gallery {
         var descriptor = FetchDescriptor<Gallery>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1

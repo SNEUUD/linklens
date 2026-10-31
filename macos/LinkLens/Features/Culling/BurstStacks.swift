@@ -76,6 +76,7 @@ enum BurstStacks {
     ///   - expanded: numbers of the bursts the user opened; the others are collapsed.
     /// - Returns: entries in display order. A burst always appears as one block, at the place of its
     ///   first photo, even if another photo was sorted between its members (e.g. a missing date).
+    ///   A burst left with one photo (the others put in the trash) is shown as a single photo.
     static func entries(for photos: [Input], expanded: Set<Int>) -> [GalleryEntry] {
         // Indices of the members of each burst, in display order.
         // `[Int: [Int]]` is a dictionary, like a `Map<number, number[]>` in TypeScript.
@@ -89,7 +90,7 @@ enum BurstStacks {
         var entries: [GalleryEntry] = []
         entries.reserveCapacity(photos.count)
         for (index, photo) in photos.enumerated() {
-            guard let number = photo.burstNumber, let burst = members[number] else {
+            guard let number = photo.burstNumber, let burst = members[number], burst.count > 1 else {
                 entries.append(GalleryEntry(photoId: photo.id, photoIndex: index))
                 continue
             }
@@ -130,6 +131,34 @@ enum BurstStacks {
     /// The best photo chosen by F3; the first one if none is marked (e.g. a failed analysis).
     private static func aiCover(of burst: [Int], in photos: [Input]) -> Int {
         burst.first { photos[$0].isBestOfBurst } ?? burst[0]
+    }
+
+    /// What `nextCover(among:)` compares.
+    struct CoverCandidate: Equatable, Sendable {
+        var id: UUID
+        var verdict: CullingVerdict?
+        var aesthetics: Double?
+        var sharpness: Double?
+    }
+
+    /// The photo that becomes the best of its burst when the AI's best photo was put in the trash:
+    /// a photo to keep before one to review before a rejected one, then the best aesthetics score,
+    /// then the sharpest, then the first in the burst. Nil for an empty list.
+    static func nextCover(among candidates: [CoverCandidate]) -> UUID? {
+        func rank(_ verdict: CullingVerdict?) -> Int {
+            switch verdict {
+            case .keep: 0
+            case .review: 1
+            case .reject, .unknown, nil: 2
+            }
+        }
+        // `min(by:)` keeps the first of equal elements: on a tie, the earliest photo wins.
+        return candidates.min { first, second in
+            if rank(first.verdict) != rank(second.verdict) { return rank(first.verdict) < rank(second.verdict) }
+            let (a, b) = (first.aesthetics ?? -.infinity, second.aesthetics ?? -.infinity)
+            if a != b { return a > b }
+            return (first.sharpness ?? -.infinity) > (second.sharpness ?? -.infinity)
+        }?.id
     }
 }
 

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The photos of a gallery as a grid of thumbnails, with the AI verdict on each one.
@@ -5,6 +6,8 @@ import SwiftUI
 /// A burst is a stack showing its best photo: S or its badge open and close it, B chooses its best photo (F4).
 /// P / U / X sort the selected photo by hand and go to the next one; A goes back to the AI's proposal.
 /// Under a verdict filter, the bursts are unfolded and S shows the whole burst under « Toutes ».
+/// ⌘-click, ⇧-click, ⇧ + arrows and ⌘A select several photos (P / U / X then sort them all); Escape
+/// selects nothing.
 struct GalleryGridView: View {
     let rows: [DisplayedPhoto]
     let loader: ThumbnailLoader
@@ -16,6 +19,8 @@ struct GalleryGridView: View {
     var cellAspectRatio = ThumbnailShape.defaultAspectRatio
     /// Smallest width of a cell, from the size slider and ⌘+ / ⌘−.
     var minimumCellWidth = ThumbnailSize.standard
+    /// « Mettre à la corbeille… » of the context menu, with the photos it is about. Nil hides it.
+    var onTrash: (([UUID]) -> Void)? = nil
     // `@FocusState` tracks whether this view has the keyboard focus (like `document.activeElement`).
     @FocusState private var isFocused: Bool
 
@@ -39,7 +44,7 @@ struct GalleryGridView: View {
                                 entry: row.entry,
                                 loader: loader,
                                 canUseOriginals: canUseOriginals,
-                                isSelected: photo.id == browser.selection,
+                                isSelected: browser.selectedIds.contains(photo.id),
                                 cellAspectRatio: cellAspectRatio,
                                 onToggleBurst: { number in
                                     browser.selection = photo.id
@@ -47,20 +52,28 @@ struct GalleryGridView: View {
                                     isFocused = true
                                 },
                                 onSort: { command in
-                                    browser.selection = photo.id
-                                    sorter.apply(command, to: [photo.id])
+                                    let ids = targets(of: photo.id)
+                                    if ids == [photo.id] { browser.selection = photo.id }
+                                    sorter.apply(command, to: ids)
                                 },
                                 onBurstCover: { command in
                                     browser.selection = photo.id
                                     sorter.apply(command, to: photo.id)
-                                }
+                                },
+                                targets: { targets(of: photo.id) },
+                                onSelectWholeBurst: { number in
+                                    browser.selectWholeBurst(number)
+                                    isFocused = true
+                                },
+                                onTrash: onTrash.map { trash in { trash(targets(of: photo.id)) } }
                             )
                                 .id(photo.id)
                                 .onTapGesture(count: 2) { browser.openViewer(on: photo.id) }
                                 // `simultaneousGesture`: the single click selects at once, without
                                 // waiting to know whether a double-click follows.
                                 .simultaneousGesture(TapGesture().onEnded {
-                                    browser.selection = photo.id
+                                    // The keys held during the click (a SwiftUI tap does not say).
+                                    browser.click(photo.id, modifier: .held(NSEvent.modifierFlags))
                                     isFocused = true
                                 })
                         }
@@ -78,13 +91,26 @@ struct GalleryGridView: View {
         // button and only gets the focus when "Full Keyboard Access" is turned on in System Settings.
         .focusable(interactions: .edit)
         .focused($isFocused)
+        // Tells the menu bar that the photos have the keyboard: ⌘⌫ then deletes the selected photos,
+        // not the gallery.
+        .focusedValue(\.photosHaveFocus, true)
         .focusEffectDisabled()
         .defaultFocus($isFocused, true)
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
             guard let direction = GridLayout.Direction(press.key) else { return .ignored }
-            browser.move(direction)
+            if press.modifiers.contains(.shift) {
+                browser.extend(direction)
+            } else {
+                browser.move(direction)
+            }
             return .handled
         }
+        .onKeyPress(.escape) {
+            browser.clearSelection() ? .handled : .ignored
+        }
+        // ⌘A is « Tout sélectionner » of the Edit menu: the menu sends the `selectAll:` command to the view
+        // that has the keyboard (like a `keydown` handler for one shortcut, but through the menu bar).
+        .onCommand(#selector(NSResponder.selectAll(_:))) { browser.selectAll() }
         .onKeyPress(keys: [.space, .return]) { _ in
             browser.openViewer() ? .handled : .ignored
         }
@@ -103,6 +129,21 @@ struct GalleryGridView: View {
             return sorter.chooseSelectedBurstCover() ? .handled : .ignored
         }
         .task { isFocused = true }
+    }
+
+    /// What a context-menu action applies to: the whole selection when the photo is part of it, else
+    /// the photo alone (as in the Finder).
+    private func targets(of photoId: UUID) -> [UUID] {
+        browser.selectedIds.contains(photoId) ? browser.orderedSelection : [photoId]
+    }
+}
+
+extension GalleryBrowser.ClickModifier {
+    /// ⌘ wins over ⇧, as in the Finder.
+    static func held(_ flags: NSEvent.ModifierFlags) -> Self {
+        if flags.contains(.command) { return .command }
+        if flags.contains(.shift) { return .shift }
+        return .none
     }
 }
 
@@ -123,6 +164,12 @@ private struct ThumbnailCell: View {
     let onSort: (SortingCommand) -> Void
     /// Chooses this photo as the best of its burst, or goes back to the AI's choice.
     let onBurstCover: (BurstCoverCommand) -> Void
+    /// The photos the context menu acts on (read when it opens): the selection, or this photo alone.
+    let targets: () -> [UUID]
+    /// « Sélectionner toute la rafale » (receives the burst's number).
+    let onSelectWholeBurst: (Int) -> Void
+    /// « Mettre à la corbeille… », nil while it is not possible here.
+    let onTrash: (() -> Void)?
     // Local state of the cell, like `useState`: the image once loaded.
     @State private var loadedImage: CGImage?
 
@@ -155,10 +202,22 @@ private struct ThumbnailCell: View {
         // Tooltip on hover: the verdict (and who chose it) and every reason of the AI.
         .help(([photo.verdictDescription, outsideFilterNote].compactMap { $0 } + messages).joined(separator: "\n"))
         .contextMenu {
+            let count = targets().count
+            if count > 1 {
+                // The menu applies to the whole selection: it says so first.
+                Text("\(count) photos sélectionnées")
+            }
             SortingButtons(showsKeys: true, action: onSort)
-            if let burst {
+            if let burst, count == 1 {
                 Divider()
                 BurstCoverButtons(burst: burst, showsKeys: true, action: onBurstCover)
+                if !burst.isShownAlone {
+                    Button("Sélectionner toute la rafale") { onSelectWholeBurst(burst.number) }
+                }
+            }
+            if let onTrash {
+                Divider()
+                Button(PhotoDeletionText.trashMenuTitle(count: count), systemImage: "trash", role: .destructive, action: onTrash)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -172,6 +231,9 @@ private struct ThumbnailCell: View {
                     Button(burst.isExpanded ? "Replier la rafale" : "Voir toute la rafale") { onToggleBurst(burst.number) }
                 }
                 BurstCoverButtons(burst: burst, action: onBurstCover)
+            }
+            if let onTrash {
+                Button(PhotoDeletionText.trashMenuTitle(count: targets().count), action: onTrash)
             }
         }
         // `.task(id:)` runs async work when the cell appears and cancels it when it scrolls away,

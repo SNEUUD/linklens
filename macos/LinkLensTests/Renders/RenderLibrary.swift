@@ -25,6 +25,8 @@ final class RenderLibrary {
     let detailsController: DetailsBackfillController
     /// Its own thumbnail cache and purge file: never the app's.
     let deletionController: GalleryDeletionController
+    /// Same: its own cache and purge file, and a trash that is never called by the renders.
+    let photoDeletion: PhotoDeletionController
     /// A review can be opened or left half-way before a render.
     let reviewController = ReviewController()
 
@@ -39,6 +41,10 @@ final class RenderLibrary {
         cache = ThumbnailCache(directory: FileManager.default.temporaryDirectory
             .appending(path: "LinkLensRenderThumbnails-\(UUID().uuidString)", directoryHint: .isDirectory))
         deletionController = GalleryDeletionController(
+            store: store, cache: cache,
+            purgeQueue: ThumbnailPurgeQueue(fileURL: cache.directory.appending(path: "PendingThumbnailRemovals.json"))
+        )
+        photoDeletion = PhotoDeletionController(
             store: store, cache: cache,
             purgeQueue: ThumbnailPurgeQueue(fileURL: cache.directory.appending(path: "PendingThumbnailRemovals.json"))
         )
@@ -139,6 +145,7 @@ final class RenderLibrary {
             .environment(availabilityMonitor)
             .environment(detailsController)
             .environment(deletionController)
+            .environment(photoDeletion)
             .environment(reviewController)
             .environment(\.thumbnailCache, cache)
             .modelContainer(container)
