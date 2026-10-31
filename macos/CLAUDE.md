@@ -54,6 +54,7 @@ macos/LinkLensTests/
 - Les écritures en masse (import, résultats d'analyse) se font dans un `ModelActor` en tâche de fond, par lots, jamais sur le `MainActor` dans une boucle.
 - L'interface lit les données via `@Query` ou des modèles `@Observable`.
 - Garder un test de volume à 10 000 photos ; si les performances ne suffisent pas, le signaler (GRDB est la solution de repli prévue).
+- Limite connue (acceptée pour la phase 1) : rattacher une photo à sa galerie coûte plus cher à mesure que la galerie grossit (SwiftData met à jour `Gallery.photos`), donc l'insertion croît comme le carré du nombre de photos : environ 3 s pour 5 000, 11 à 14 s pour 10 000. Le test exige moins de 5 s à 5 000 et moins de 20 s à 10 000. À revoir avant d'accepter des galeries de plus de 20 000 photos.
 
 ### IA (F3, F4)
 - Similarité : `VNGenerateImageFeaturePrintRequest`. Visages : `VNDetectFaceCaptureQualityRequest` + points du visage (yeux fermés). Score : `VNCalculateImageAestheticsScoresRequest`. Flou : largeur des contours zone par zone (dérivées via Accelerate), jugée aussi par rapport au reste de la galerie.
