@@ -107,11 +107,11 @@ enum WindowRenderer {
         return url
     }
 
-    /// Sends a key to the window's focused view, as if typed (`→` is key code 124).
-    static func press(keyCode: UInt16, characters: String, in window: NSWindow) {
+    /// Sends a key to the window's focused view, as if typed (`→` is key code 124), with `modifiers` held.
+    static func press(keyCode: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = [], in window: NSWindow) {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             guard let event = NSEvent.keyEvent(
-                with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                with: type, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: window.windowNumber, context: nil, characters: characters,
                 charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
             ) else { continue }
@@ -119,8 +119,8 @@ enum WindowRenderer {
         }
     }
 
-    static func pressRightArrow(in window: NSWindow) {
-        press(keyCode: 124, characters: String(Character(UnicodeScalar(UInt16(NSRightArrowFunctionKey))!)), in: window)
+    static func pressRightArrow(in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) {
+        press(keyCode: 124, characters: String(Character(UnicodeScalar(UInt16(NSRightArrowFunctionKey))!)), modifiers: modifiers, in: window)
     }
 
     /// The window as the screen shows it (glass, blur, list rows included), through

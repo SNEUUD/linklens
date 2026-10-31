@@ -627,6 +627,136 @@ struct InterfaceRenderTests {
         )
     }
 
+    // MARK: - Deleting photos (batch 3)
+
+    /// Six photos selected with → × 4 then ⇧→ × 5: rings on each, the inspector's summary.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func photosMultiSelection(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try await withInspectorShown {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "photos-selection-multiple",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            ) { window in
+                for _ in 0..<4 { WindowRenderer.pressRightArrow(in: window) }
+                for _ in 0..<5 { WindowRenderer.pressRightArrow(in: window, modifiers: .shift) }
+            }
+        }
+    }
+
+    /// « Mettre 6 photos à la corbeille ? » over the grid: thumbnails, size, what happens, the buttons.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func photosDeletionWindow(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let photos = Self.sessionPhotos(library).filter { library.cache.contains($0.id) }.prefix(6)
+        let request = PhotoDeletionRequest(galleryId: library.session.id, galleryName: library.session.name, kind: .selection, items: photos.map(\.trashItem))
+        library.photoDeletion.showForRenders(request: request, stamps: Self.stamps(of: request))
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "photos-suppression",
+            size: CGSize(width: 1280, height: 860),
+            appearance: appearance
+        )
+    }
+
+    /// The 26 rejected photos, from the « Rejeter » filter (its button behind the window).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func photosDeletionRejected(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let filters = VerdictFilterStore()
+        filters.setFilter(.reject, galleryId: library.session.id)
+        defer { filters.setFilter(.all, galleryId: library.session.id) }
+        let rejected = Self.sessionPhotos(library).filter { $0.verdict == .reject }
+        // The photos with a real thumbnail first, so the window shows some.
+        let ordered = rejected.filter { library.cache.contains($0.id) } + rejected.filter { !library.cache.contains($0.id) }
+        let request = PhotoDeletionRequest(galleryId: library.session.id, galleryName: library.session.name, kind: .rejected, items: ordered.map(\.trashItem))
+        library.photoDeletion.showForRenders(request: request, stamps: Self.stamps(of: request))
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "photos-suppression-rejetees",
+            size: CGSize(width: 1280, height: 900),
+            appearance: appearance
+        )
+    }
+
+    /// The « Rejeter » filter on its own: « Mettre les 26 photos rejetées à la corbeille… » next to the filters.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func photosRejectedFilter(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let filters = VerdictFilterStore()
+        filters.setFilter(.reject, galleryId: library.session.id)
+        defer { filters.setFilter(.all, galleryId: library.session.id) }
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "photos-filtre-rejeter",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// An exFAT disk without a trash: nothing moved, the files listed, « Retirer seulement de LinkLens ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func photosTrashRefused(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let refusal = CocoaError(.fileWriteVolumeReadOnly).localizedDescription
+        let skipped = Self.sessionPhotos(library).filter { $0.verdict == .reject }.prefix(8).map {
+            SkippedPhoto(item: $0.trashItem, reason: .trashRefused(refusal))
+        }
+        library.photoDeletion.showForRenders(report: PhotoDeletionReport(
+            galleryId: library.session.id, galleryName: library.session.name, trashedCount: 0, skipped: Array(skipped)
+        ))
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "photos-corbeille-refusee",
+            size: CGSize(width: 1280, height: 860),
+            appearance: appearance
+        )
+    }
+
+    /// Right after: « 26 photos mises à la corbeille · Annuler » over the grid.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func photosDeletionBanner(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.photoDeletion.showForRenders(banner: PhotoDeletionBanner(recordId: UUID(), kind: .trashed(count: 26, keptInPlace: 0)))
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "photos-bandeau",
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+    }
+
+    /// The review's summary with « Mettre les 26 photos rejetées à la corbeille… », inspector asked for
+    /// but hidden (nothing to inspect there).
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func reviewSummaryWithTrash(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let session = library.reviewController.open(galleryId: library.session.id, photos: Self.reviewInputs(of: library.session))
+        session.goToStop(session.stops.count)
+        try await withInspector(shown: true) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "revue-bilan-corbeille",
+                size: CGSize(width: 1440, height: 900),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// Every file « looked at » (nothing is read on disk): the window then says none is missing.
+    private static func stamps(of request: PhotoDeletionRequest) -> [UUID: FileStamp] {
+        Dictionary(uniqueKeysWithValues: request.items.map { ($0.photoId, FileStamp(size: $0.fileSize, modifiedAt: nil)) })
+    }
+
+    /// The session's photos in display order (date, then name).
+    private static func sessionPhotos(_ library: RenderLibrary) -> [Photo] {
+        library.session.photos.sorted { ($0.captureDate ?? .distantPast, $0.relativePath) < ($1.captureDate ?? .distantPast, $1.relativePath) }
+    }
+
     /// The inspector is remembered in the user defaults (`@AppStorage`): shown for the render, then the
     /// previous value is put back.
     private func withInspectorShown(_ body: () async throws -> Void) async throws {
