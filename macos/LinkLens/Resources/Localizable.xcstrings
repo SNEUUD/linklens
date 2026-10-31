@@ -83,10 +83,10 @@
     "%@ de la photo est blanche, sans détail : souvent le ciel ou un reflet." : {
 
     },
-    "%@ de la photo est noire, sans détail." : {
+    "%@ de la photo est noire : il n'y a presque rien à voir." : {
 
     },
-    "%@ de la photo est noire : il n'y a presque rien à voir." : {
+    "%@ de la photo est noire, sans détail." : {
 
     },
     "%@ est un peu meilleure. Gardez celle-ci si vous la préférez." : {
@@ -153,6 +153,15 @@
     "%lld à revoir" : {
 
     },
+    "%lld encore à revoir" : {
+
+    },
+    "%lld gardée" : {
+
+    },
+    "%lld gardées" : {
+
+    },
     "%lld pas encore triées" : {
 
     },
@@ -171,6 +180,12 @@
           }
         }
       }
+    },
+    "%lld rejetée" : {
+
+    },
+    "%lld rejetées" : {
+
     },
     "%lld sur %lld" : {
       "localizations" : {
@@ -227,6 +242,12 @@
 
     },
     "^[%lld vidéo](inflect: true)" : {
+
+    },
+    "← : revenir à la dernière rafale · ⌘Z : annuler la dernière décision" : {
+
+    },
+    "← → parcourir la rafale · Z : les deux photos à 100 % · Échap : quitter, la position est gardée" : {
 
     },
     "2048 pixels de côté, sRGB, qualité 80 %, sans position GPS" : {
@@ -309,6 +330,9 @@
 
     },
     "Aperçu réduit : %@" : {
+
+    },
+    "Aperçu réduit, zoom 100 %% indisponible : %@" : {
 
     },
     "Appareil" : {
@@ -662,6 +686,9 @@
     "Entourer le sujet trouvé par l'IA" : {
 
     },
+    "Espace" : {
+
+    },
     "Espace récupérable : %@" : {
 
     },
@@ -779,6 +806,15 @@
 
     },
     "Garder cette copie" : {
+
+    },
+    "Garder la %@, rejeter les autres" : {
+
+    },
+    "Garder la meilleure, rejeter les autres" : {
+
+    },
+    "Garder la meilleure, rejeter les autres, touche Retour" : {
 
     },
     "Glissez un dossier de photos dans cette fenêtre pour en faire une galerie. Les fichiers restent à leur place." : {
@@ -911,6 +947,9 @@
 
     },
     "La meilleure photo de cette rafale est %@." : {
+
+    },
+    "La meilleure photo devient « Garder », les autres « Rejeter » (sauf celles que vous avez gardées avec P). Rien n'est supprimé. (Retour)" : {
 
     },
     "La mise à la corbeille déplace les fichiers originaux." : {
@@ -1048,6 +1087,9 @@
     "Les fichiers originaux ne sont pas accessibles : LinkLens montre la plus grande image gardée en cache." : {
 
     },
+    "Les fichiers originaux ne sont pas accessibles : LinkLens montre les miniatures gardées en cache." : {
+
+    },
     "Les fichiers restent à leur place" : {
 
     },
@@ -1120,6 +1162,9 @@
     "Meilleure" : {
 
     },
+    "meilleure de la rafale" : {
+
+    },
     "Meilleure de la rafale" : {
 
     },
@@ -1145,6 +1190,12 @@
 
     },
     "Mettre aussi le dossier à la corbeille" : {
+
+    },
+    "Mettre la rejetée à la corbeille…" : {
+
+    },
+    "Mettre les %lld rejetées à la corbeille…" : {
 
     },
     "Mis à la corbeille, mais LinkLens ne pourra pas l'en sortir." : {
@@ -1214,6 +1265,9 @@
     "Outils" : {
 
     },
+    "P, U, X : trier puis passer à la suite · → ou Espace : passer · ← : revenir · Échap : quitter" : {
+
+    },
     "Pas assez de place à cet emplacement : il faut %@, il reste %@." : {
       "localizations" : {
         "fr" : {
@@ -1239,6 +1293,21 @@
     "Pas encore triée par l'IA. Triez avec" : {
 
     },
+    "Passer" : {
+
+    },
+    "Passer à la suite sans rien changer (Espace)" : {
+
+    },
+    "Passer en revue les photos « À revoir » : une rafale entière se décide d'une touche (⌘R)." : {
+
+    },
+    "Passer en revue les photos « À revoir », une rafale à la fois" : {
+
+    },
+    "Passer sans rien changer, touche Espace" : {
+
+    },
     "Pellicule" : {
 
     },
@@ -1260,7 +1329,13 @@
     "Photo précédente, touche flèche gauche" : {
 
     },
+    "Photo seule" : {
+
+    },
     "Photo suivante (→)" : {
+
+    },
+    "Photo suivante sans rien changer (→ ou Espace)" : {
 
     },
     "Photo suivante, touche flèche droite" : {
@@ -1281,6 +1356,9 @@
     "Photos" : {
 
     },
+    "Photos de la rafale" : {
+
+    },
     "Pleine résolution, 8 bits, sRGB, compression sans perte (LZW), 300 ppp" : {
 
     },
@@ -1288,6 +1366,9 @@
 
     },
     "Pleine résolution, sRGB, qualité 92 %, 300 ppp" : {
+
+    },
+    "plus aucune photo à revoir" : {
 
     },
     "Pour copier les photos de la carte « %@ », cliquez sur « Autoriser » sans changer de dossier. Rien ne sera modifié sur la carte." : {
@@ -1369,6 +1450,9 @@
     "Proposition de l'IA" : {
 
     },
+    "Quitter la revue (Échap). « Reprendre la revue » vous ramène ici." : {
+
+    },
     "Raccourci : Commande O" : {
 
     },
@@ -1419,6 +1503,15 @@
     "Rafale de %lld photos." : {
 
     },
+    "Rafale suivante" : {
+
+    },
+    "Rafale suivante sans rien changer, touche Espace" : {
+
+    },
+    "Rafale suivante, sans rien changer" : {
+
+    },
     "Raison" : {
 
     },
@@ -1467,6 +1560,27 @@
     "Replier la rafale %lld" : {
 
     },
+    "Reprendre (%lld)" : {
+
+    },
+    "Reprendre la revue (reste %lld)" : {
+
+    },
+    "Reprendre la revue là où vous l'avez laissée (⌘R)." : {
+
+    },
+    "Reprendre la revue, %lld photos encore à revoir, Commande R" : {
+
+    },
+    "Reprendre la revue…" : {
+
+    },
+    "reste %lld photos à revoir" : {
+
+    },
+    "reste 1 photo à revoir" : {
+
+    },
     "Retirer cette galerie de LinkLens. Vous pourrez annuler." : {
 
     },
@@ -1482,7 +1596,31 @@
     "Revenir à la proposition de l'IA, touche A" : {
 
     },
+    "Revenir aux photos" : {
+
+    },
     "Revenir aux photos (Espace ou Échap)" : {
+
+    },
+    "Revoir la dernière" : {
+
+    },
+    "Revoir les %lld" : {
+
+    },
+    "Revoir les %lld photos à revoir, une rafale à la fois, Commande R" : {
+
+    },
+    "Revoir les %lld restantes" : {
+
+    },
+    "Revoir les photos à revoir…" : {
+
+    },
+    "Revue · %@" : {
+
+    },
+    "Revue terminée" : {
 
     },
     "Rien n'a été supprimé. %@" : {
@@ -1630,6 +1768,9 @@
     "sur le sujet" : {
 
     },
+    "Sur les %lld photos qui étaient à revoir :" : {
+
+    },
     "sur toute la photo" : {
 
     },
@@ -1643,6 +1784,9 @@
 
     },
     "Terminé" : {
+
+    },
+    "Terminer" : {
 
     },
     "TIFF" : {
@@ -1699,6 +1843,9 @@
     "Trier cette photo" : {
 
     },
+    "Trier la photo montrée" : {
+
+    },
     "Trier les photos" : {
 
     },
@@ -1727,6 +1874,9 @@
 
     },
     "Une carte SD ou un dossier déjà rangé. Chaque fichier copié est vérifié avant de vous proposer de formater la carte." : {
+
+    },
+    "Une nouvelle revue des photos encore « À revoir »" : {
 
     },
     "Une personne a les yeux fermés." : {
