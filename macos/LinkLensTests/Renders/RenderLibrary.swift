@@ -107,6 +107,9 @@ final class RenderLibrary {
         for (index, photo) in weddingPhotos.enumerated() where index < 40 {
             try cache.store(Self.drawnPhoto(seed: index + 100), for: photo.id)
         }
+        // As in the app: an unplugged disk turns « Supprimer… » into « Mettre en attente de corbeille… ».
+        let monitor = availabilityMonitor
+        photoDeletion.galleryAvailability = { monitor.availability(of: $0) }
     }
 
     deinit {

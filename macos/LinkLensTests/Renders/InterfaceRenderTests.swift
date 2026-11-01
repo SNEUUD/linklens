@@ -747,6 +747,96 @@ struct InterfaceRenderTests {
         }
     }
 
+    // MARK: - Pending trash (disk unplugged)
+
+    /// The wedding gallery, its disk unplugged, 8 rejected photos waiting for the trash: dimmed with the
+    /// orange bin, the count in the sidebar and under the banner.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func pendingTrashGrid(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try Self.markPending(Self.weddingRejected(library).prefix(8), in: library)
+        library.availabilityMonitor.refresh()
+        await library.availabilityMonitor.waitUntilIdle()
+        try #require(library.photoDeletion.pendingVolumeName(galleryId: library.wedding.id) == "Photos 2TB")
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.wedding),
+                named: "attente-grille-disque-absent",
+                size: CGSize(width: 1280, height: 800),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// « Mettre 6 photos en attente de corbeille ? » while the disk is unplugged.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func pendingTrashWindow(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        library.availabilityMonitor.refresh()
+        await library.availabilityMonitor.waitUntilIdle()
+        let photos = Self.weddingRejected(library).prefix(6)
+        var request = PhotoDeletionRequest(galleryId: library.wedding.id, galleryName: library.wedding.name, kind: .selection, items: photos.map(\.trashItem))
+        request.action = .markPending(volumeName: "Photos 2TB")
+        library.photoDeletion.showForRenders(request: request, stamps: [:])
+        try await Self.renderPhotoDeletionSheet(library, named: "attente-fenetre", height: 720, appearance: appearance)
+    }
+
+    /// The disk is back (the session's folder is reachable here): « 6 photos en attente de corbeille »
+    /// with « Retirer de l'attente » and « Mettre à la corbeille… » above the filters.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func pendingTrashBanner(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try Self.markPending(Self.sessionPhotos(library).filter { $0.verdict == .reject }.prefix(6), in: library)
+        try await withInspector(shown: false) {
+            try await WindowRenderer.render(
+                library.mainWindow(selecting: library.session),
+                named: "attente-bandeau-retour",
+                size: CGSize(width: 1280, height: 800),
+                appearance: appearance
+            )
+        }
+    }
+
+    /// After « Mettre à la corbeille… »: 5 moved, one file edited while the disk was away stayed in place.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func pendingTrashReport(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let photo = try #require(Self.sessionPhotos(library).first { $0.verdict == .reject })
+        var item = photo.trashItem
+        item.isPendingTrash = true
+        library.photoDeletion.showForRenders(report: PhotoDeletionReport(
+            galleryId: library.session.id, galleryName: library.session.name, trashedCount: 5,
+            skipped: [SkippedPhoto(item: item, reason: .changedSinceImport)]
+        ))
+        try await Self.renderPhotoDeletionSheet(library, named: "attente-rapport", height: 520, appearance: appearance)
+    }
+
+    /// The photo deletion's window on its own, in a window of its size: the capture of a sheet over the
+    /// main window reads that part of the screen, which another window in front can hide.
+    private static func renderPhotoDeletionSheet(_ library: RenderLibrary, named name: String, height: CGFloat, appearance: WindowRenderer.Appearance) async throws {
+        try await WindowRenderer.render(
+            PhotoDeletionSheet(cache: library.cache)
+                .environment(library.photoDeletion)
+                .background(Palette.card.color),
+            named: name,
+            size: CGSize(width: 560, height: height),
+            appearance: appearance
+        )
+    }
+
+    /// The rejected photos of the wedding that have a (drawn) thumbnail, in display order.
+    private static func weddingRejected(_ library: RenderLibrary) -> [Photo] {
+        library.wedding.photos
+            .sorted { ($0.captureDate ?? .distantPast, $0.relativePath) < ($1.captureDate ?? .distantPast, $1.relativePath) }
+            .filter { $0.verdict == .reject && library.cache.contains($0.id) }
+    }
+
+    /// Marks photos as waiting for the trash, straight in the render catalogue.
+    private static func markPending(_ photos: some Sequence<Photo>, in library: RenderLibrary) throws {
+        for photo in photos { photo.pendingTrashAt = Date(timeIntervalSince1970: 1_793_000_000) }
+        try library.container.mainContext.save()
+    }
+
     /// Every file « looked at » (nothing is read on disk): the window then says none is missing.
     private static func stamps(of request: PhotoDeletionRequest) -> [UUID: FileStamp] {
         Dictionary(uniqueKeysWithValues: request.items.map { ($0.photoId, FileStamp(size: $0.fileSize, modifiedAt: nil)) })
