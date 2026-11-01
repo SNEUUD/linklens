@@ -184,11 +184,19 @@ struct PhotoTrasher: Sendable {
 
     /// Removes the photos from the catalogue (the files are not touched here), by batches, then gives a
     /// new best photo to each burst that lost its own. « Retirer seulement de LinkLens » uses it alone.
+    ///
+    /// All or nothing: if a batch fails, the batches already removed are put back, so the catalogue still
+    /// matches the files (the caller then puts the files back where they were).
     func removeFromCatalogue(_ photoIds: [UUID], galleryId: UUID) async throws -> LibraryRemoval {
         var snapshots: [PhotoSnapshot] = []
-        for start in stride(from: 0, to: photoIds.count, by: batchSize) {
-            let batch = Array(photoIds[start..<min(start + batchSize, photoIds.count)])
-            snapshots += try await store.removePhotos(ids: batch)
+        do {
+            for start in stride(from: 0, to: photoIds.count, by: batchSize) {
+                let batch = Array(photoIds[start..<min(start + batchSize, photoIds.count)])
+                snapshots += try await store.removePhotos(ids: batch)
+            }
+        } catch {
+            if !snapshots.isEmpty { try? await store.restorePhotos(snapshots, galleryId: galleryId) }
+            throw error
         }
         // The bursts whose best photo (the AI's) left. Only a missing star if this fails: not worth an error.
         let lostCovers = snapshots.filter { $0.isBestOfBurst && $0.burstNumber != nil }

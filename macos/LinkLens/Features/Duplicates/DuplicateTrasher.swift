@@ -220,6 +220,8 @@ struct DuplicateTrasher: Sendable {
         writableFolders: [UUID: URL]
     ) async throws -> RestoreOutcome {
         var restored: [UUID: [PhotoSnapshot]] = [:]
+        /// Where each file put back went, by gallery: if the catalogue refuses, they return to the trash.
+        var putBack: [UUID: [(trashURL: URL, destination: URL)]] = [:]
         var skipped: [SkippedFile] = []
         for file in files {
             func skip(_ reason: TrashSkipReason) {
@@ -247,9 +249,19 @@ struct DuplicateTrasher: Sendable {
                 continue
             }
             restored[file.galleryId, default: []].append(file.photo)
+            putBack[file.galleryId, default: []].append((file.trashURL, destination))
         }
         for (galleryId, photos) in restored {
-            try await store.restorePhotos(photos, galleryId: galleryId)
+            do {
+                try await store.restorePhotos(photos, galleryId: galleryId)
+            } catch {
+                // The catalogue refused: the files go back to the trash, so the photos are not left on the
+                // disk without their place in LinkLens, and « Annuler » can be tried again.
+                for file in putBack[galleryId] ?? [] {
+                    try? FileManager.default.moveItem(at: file.destination, to: file.trashURL)
+                }
+                throw error
+            }
         }
         return RestoreOutcome(restored: restored.values.reduce(0) { $0 + $1.count }, skipped: skipped)
     }

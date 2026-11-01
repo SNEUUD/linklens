@@ -22,7 +22,7 @@ actor LibraryStore {
         gallery.volumeName = volume?.name
         gallery.volumeUUID = volume?.uuid
         modelContext.insert(gallery)
-        try modelContext.save()
+        try save()
         return gallery.id
     }
 
@@ -36,18 +36,18 @@ actor LibraryStore {
         }
         gallery.photoCount += drafts.count
         gallery.videoCount += drafts.filter { $0.mediaKind == .video }.count
-        try modelContext.save()
+        try save()
     }
 
     func finishIndexing(galleryId: UUID) throws {
         try fetchGallery(id: galleryId).indexedAt = Date()
-        try modelContext.save()
+        try save()
     }
 
     /// Removes the gallery and its photos from the catalogue. The files on disk are not touched.
     func deleteGallery(id: UUID) throws {
         modelContext.delete(try fetchGallery(id: id))
-        try modelContext.save()
+        try save()
     }
 
     // MARK: - Deleting a gallery (with undo)
@@ -59,7 +59,7 @@ actor LibraryStore {
         let snapshot = gallery.snapshot
         // `.cascade` on `Gallery.photos`: the photos go with their gallery.
         modelContext.delete(gallery)
-        try modelContext.save()
+        try save()
         return snapshot
     }
 
@@ -76,7 +76,7 @@ actor LibraryStore {
             modelContext.insert(photo)
             photo.gallery = gallery
         }
-        try modelContext.save()
+        try save()
     }
 
     /// The ids among `photoIds` of photos in the catalogue: their thumbnails must stay in the cache.
@@ -90,7 +90,7 @@ actor LibraryStore {
         for gallery in unfinished {
             modelContext.delete(gallery)
         }
-        try modelContext.save()
+        try save()
         return unfinished.count
     }
 
@@ -118,12 +118,12 @@ actor LibraryStore {
         for result in results {
             try photosById[result.photoId]?.apply(result, analyzedAt: analyzedAt)
         }
-        try modelContext.save()
+        try save()
     }
 
     func finishCulling(galleryId: UUID) throws {
         try fetchGallery(id: galleryId).culledAt = Date()
-        try modelContext.save()
+        try save()
     }
 
     /// Indexed galleries that were never sorted (e.g. indexed before F3, or sorting cancelled), oldest first.
@@ -170,7 +170,7 @@ actor LibraryStore {
         for detail in details {
             photosById[detail.photoId]?.apply(detail)
         }
-        try modelContext.save()
+        try save()
     }
 
     // MARK: - Duplicates (F5)
@@ -202,7 +202,7 @@ actor LibraryStore {
         for photo in try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) })) {
             photo.sha256 = fingerprints[photo.id]
         }
-        try modelContext.save()
+        try save()
     }
 
     /// After a card import (F1): the fingerprints already checked during the copy, by path in the
@@ -215,12 +215,12 @@ actor LibraryStore {
                 photo.sha256 = sha256
             }
         }
-        try modelContext.save()
+        try save()
     }
 
     func setWriteBookmark(_ bookmark: Data, galleryId: UUID) throws {
         try fetchGallery(id: galleryId).writeBookmark = bookmark
-        try modelContext.save()
+        try save()
     }
 
     // MARK: - Availability (F9)
@@ -244,7 +244,7 @@ actor LibraryStore {
                 gallery.folderPath = path
             }
         }
-        try modelContext.save()
+        try save()
     }
 
     /// Removes photos whose file went to the trash. Returns what is needed to put them back.
@@ -258,7 +258,7 @@ actor LibraryStore {
             }
             modelContext.delete(photo)
         }
-        try modelContext.save()
+        try save()
         return snapshots
     }
 
@@ -274,7 +274,7 @@ actor LibraryStore {
             gallery.photoCount += 1
             if photo.mediaKind == .video { gallery.videoCount += 1 }
         }
-        try modelContext.save()
+        try save()
     }
 
     // MARK: - Pending trash (disk unplugged)
@@ -290,7 +290,7 @@ actor LibraryStore {
                 // `dates[photo.id]` is a `Date??`: the outer optional says whether the key is there.
                 if let date = dates[photo.id] { photo.pendingTrashAt = date }
             }
-            try modelContext.save()
+            try save()
         }
     }
 
@@ -322,7 +322,7 @@ actor LibraryStore {
             photo.isBestOfBurst = true
             promoted[number] = id
         }
-        if !promoted.isEmpty { try modelContext.save() }
+        if !promoted.isEmpty { try save() }
         return promoted
     }
 
@@ -333,7 +333,18 @@ actor LibraryStore {
         for photo in try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) })) {
             photo.isBestOfBurst = false
         }
-        try modelContext.save()
+        try save()
+    }
+
+    /// Saves, or forgets every unsaved change when the save fails. Otherwise those changes would stay in
+    /// the context and the next save, of any other operation, would write them (half a deletion…).
+    private func save() throws {
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
     }
 
     private func fetchGallery(id: UUID) throws -> Gallery {
