@@ -79,6 +79,7 @@ xcodebuild -project macos/LinkLens.xcodeproj -scheme LinkLens -destination 'plat
 ```
 
 Tests avec **Swift Testing** pour la logique (scores, doublons, empreintes, conversion). Lancer build et tests avant chaque commit.
+Pendant les tests, l'app hôte démarre sur un catalogue vide en mémoire (`LinkLensApp.isRunningTests`) : les tests n'ouvrent jamais le vrai catalogue. Chaque test crée son propre conteneur.
 
 ### Rendus PNG de l'interface (sans accès à l'écran)
 

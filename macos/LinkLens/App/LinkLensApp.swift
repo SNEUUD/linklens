@@ -20,9 +20,14 @@ struct LinkLensApp: App {
     /// The reviews of the « À revoir » photos, kept while the app runs (« Reprendre la revue »).
     @State private var reviewController = ReviewController()
 
+    /// True while the unit tests run inside the app: the app then starts on an empty catalogue in
+    /// memory, so the tests never open (nor migrate) the real one.
+    static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     init() {
         do {
-            container = try ModelContainer(for: Gallery.self, Photo.self)
+            let configuration = ModelConfiguration(isStoredInMemoryOnly: Self.isRunningTests)
+            container = try ModelContainer(for: Gallery.self, Photo.self, configurations: configuration)
         } catch {
             fatalError("Impossible d'ouvrir la base SwiftData : \(error)")
         }
@@ -89,8 +94,8 @@ struct LinkLensApp: App {
         _cardMonitor = State(initialValue: monitor)
         // Galleries never sorted (indexed before F3, or sorting interrupted) are sorted at launch, and
         // inserted cards are watched. Not while the unit tests run inside the app: they must not touch
-        // the real catalogue.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+        // the real files.
+        if !Self.isRunningTests {
             culling.cullPendingGalleries()
             details.fillPendingGalleries()
             monitor.start()
