@@ -304,8 +304,8 @@ struct DuplicatesUnpluggedTests {
             asked += 1
             return nil
         }
-        var unplugged: Set<UUID> = [secondId]
-        controller.galleryAvailability = { unplugged.contains($0) ? .diskDisconnected(volumeName: "Photos 2TB") : .available }
+        let unplugged = TestValue<Set<UUID>>([secondId])
+        controller.galleryAvailability = { unplugged.value.contains($0) ? .diskDisconnected(volumeName: "Photos 2TB") : .available }
         controller.scan()
         await controller.waitUntilIdle()
         let group = try #require(controller.report?.groups.first)
@@ -324,7 +324,7 @@ struct DuplicatesUnpluggedTests {
         #expect(FileManager.default.fileExists(atPath: first.url.appending(path: name).path))
 
         // The disk is back.
-        unplugged = []
+        unplugged.value = []
         #expect(controller.selectedCopyCount == 1)
     }
 }

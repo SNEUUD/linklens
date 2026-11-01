@@ -55,6 +55,7 @@ struct ReviewModeView: View {
         // ⌘Z / ⇧⌘Z: the review goes back to the stop of the photo that changed. `[weak session]` keeps the
         // sorter from holding the review alive (like a `WeakRef`).
         .onAppear {
+            let session = session
             sorter.onRestore = { [weak session] photoId in session?.reveal(photoId) }
         }
         .onDisappear { sorter.onRestore = nil }

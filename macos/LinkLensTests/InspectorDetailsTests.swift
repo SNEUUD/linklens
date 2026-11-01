@@ -194,13 +194,13 @@ struct InspectorDetailsTests {
         try context.save()
 
         let controller = DetailsBackfillController(store: store)
-        var reachable = false
-        controller.canRead = { _ in reachable }
+        let reachable = TestValue(false)
+        controller.canRead = { _ in reachable.value }
         await controller.fillPendingGalleries().value
         await controller.waitUntilIdle()
         #expect(try await store.galleriesNeedingDetails() == [galleryId], "disk unplugged: skipped")
 
-        reachable = true // The disk is back: the app asks again.
+        reachable.value = true // The disk is back: the app asks again.
         await controller.fillPendingGalleries().value
         await controller.waitUntilIdle()
         #expect(try await store.galleriesNeedingDetails().isEmpty)

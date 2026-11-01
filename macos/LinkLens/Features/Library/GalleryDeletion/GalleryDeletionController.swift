@@ -256,11 +256,7 @@ final class GalleryDeletionController {
         let record = DeletionRecord(snapshot: snapshot, trashedFolder: trashed, accessedFolder: accessedFolder)
         records[gallery.id] = record
         registerUndo(record)
-        record.expiry = Task { [weak self, undoPeriod] in
-            try? await Task.sleep(for: undoPeriod)
-            guard !Task.isCancelled else { return }
-            await self?.finish(galleryId: gallery.id)
-        }
+        scheduleExpiry(of: record, galleryId: gallery.id)
 
         self.request = nil
         folderCheck = nil
@@ -322,6 +318,16 @@ final class GalleryDeletionController {
         undoManager.endUndoGrouping()
     }
 
+    /// Once the undo period is over, the deletion becomes final (`finish`). `[weak self]`: the waiting
+    /// task does not keep the controller alive.
+    private func scheduleExpiry(of record: DeletionRecord, galleryId: UUID) {
+        record.expiry = Task { [weak self, undoPeriod] in
+            try? await Task.sleep(for: undoPeriod)
+            guard !Task.isCancelled else { return }
+            await self?.finish(galleryId: galleryId)
+        }
+    }
+
     private func startUndo(_ record: DeletionRecord) {
         guard !record.isUndoing, records[record.snapshot.id] === record else { return }
         record.isUndoing = true
@@ -340,11 +346,7 @@ final class GalleryDeletionController {
                 errorMessage = error.localizedDescription
                 record.isUndoing = false
                 // Still undoable from the banner until the end of the period.
-                record.expiry = Task { [weak self, undoPeriod] in
-                    try? await Task.sleep(for: undoPeriod)
-                    guard !Task.isCancelled else { return }
-                    await self?.finish(galleryId: galleryId)
-                }
+                scheduleExpiry(of: record, galleryId: galleryId)
                 return
             }
             records[galleryId] = nil

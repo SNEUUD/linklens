@@ -86,13 +86,13 @@ struct PendingTrashTests {
     @Test func theTrashIsOfferedOnlyOnceTheDiskIsBack() {
         let setup = PendingTrashOfferSetup()
         let controller = setup.controller
-        var availability = Self.unplugged
-        controller.galleryAvailability = { _ in availability }
+        let availability = TestValue(Self.unplugged)
+        controller.galleryAvailability = { _ in availability.value }
         #expect(!controller.offersPendingTrash(galleryId: UUID(), pendingCount: 26), "disk unplugged: no offer")
-        availability = .folderMissing
+        availability.value = .folderMissing
         #expect(!controller.offersPendingTrash(galleryId: UUID(), pendingCount: 26), "folder missing: no offer")
         #expect(controller.blockReason(galleryId: UUID()) != nil, "folder missing: no marking either")
-        availability = .available
+        availability.value = .available
         #expect(!controller.offersPendingTrash(galleryId: UUID(), pendingCount: 0))
         #expect(controller.offersPendingTrash(galleryId: UUID(), pendingCount: 26))
         // An offer only: nothing opens or moves by itself.

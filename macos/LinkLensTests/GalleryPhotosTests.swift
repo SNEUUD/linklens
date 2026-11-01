@@ -73,7 +73,7 @@ struct GalleryPhotosTests {
     /// A big gallery: one pass and the lookups after a deletion stay well under a frame budget per click.
     @Test func aBigGalleryIsReadInOnePass() throws {
         let container = try makeContainer()
-        let photos = try makePhotos(4_120, in: container) { index, photo in
+        _ = try makePhotos(4_120, in: container) { index, photo in
             photo.cullingVerdictRaw = ["keep", "review", "reject"][index % 3]
             photo.burstNumber = index % 5 == 0 ? nil : index / 5
         }
