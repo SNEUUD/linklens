@@ -90,9 +90,10 @@ struct DuplicateScanner: Sendable {
                 guard nextIndex < files.count else { return }
                 let file = files[nextIndex]
                 nextIndex += 1
-                let url = folders[file.galleryId]!.appending(path: file.relativePath)
+                // Always there (`scan` only passes files of opened folders); a missing one counts as unreadable.
+                let url = folders[file.galleryId]?.appending(path: file.relativePath)
                 group.addTask {
-                    (file.photoId, try? VerifiedCopier.sha256(of: url))
+                    (file.photoId, url.flatMap { try? VerifiedCopier.sha256(of: $0) })
                 }
             }
 
