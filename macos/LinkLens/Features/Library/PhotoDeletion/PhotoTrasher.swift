@@ -8,6 +8,9 @@ struct PhotoTrashItem: Sendable, Equatable, Identifiable {
     /// Size read at indexing time: a file of another size was changed or replaced since.
     var fileSize: Int64
     var isVideo = false
+    /// Marked while the disk was unplugged: no stamp could be read then, so a size other than the
+    /// catalogue's is reported as « changed since the import ».
+    var isPendingTrash = false
 
     var id: UUID { photoId }
     var fileName: String { (relativePath as NSString).lastPathComponent }
@@ -110,7 +113,10 @@ struct PhotoTrasher: Sendable {
         }
         // Nil for a missing file, but also for a folder or a link: never followed, never moved.
         guard let stamp = FileStamp.read(url) else { return .skip(.missing) }
-        guard stamp.size == item.fileSize, expected == nil || expected == stamp else { return .skip(.notIdentical) }
+        // The catalogue keeps the size read at import, not the modification date: for a photo marked
+        // while its disk was away, the size is the only thing to compare with.
+        guard stamp.size == item.fileSize else { return .skip(item.isPendingTrash ? .changedSinceImport : .notIdentical) }
+        guard expected == nil || expected == stamp else { return .skip(.notIdentical) }
         return .ready(url, stamp)
     }
 

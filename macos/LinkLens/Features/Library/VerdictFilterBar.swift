@@ -52,15 +52,17 @@ struct VerdictFilterBar: View {
         HStack(spacing: 12) {
             Button(role: .destructive, action: action.perform) {
                 if isCompact {
-                    Label(String(localized: "Corbeille (\(action.count))…"), systemImage: "trash")
+                    Label(action.marksPending ? String(localized: "En attente (\(action.count))…") : String(localized: "Corbeille (\(action.count))…"), systemImage: "trash")
                 } else {
-                    Label(PhotoDeletionText.rejectedMenuTitle(count: action.count), systemImage: "trash")
+                    Label(action.title, systemImage: "trash")
                 }
             }
             .buttonStyle(.capsule(.destructive, size: .small))
             .lineLimit(1)
-            .help("Les photos de ce filtre vont dans la corbeille du Finder, après confirmation. Vous pourrez annuler.")
-            .accessibilityLabel(Text(verbatim: PhotoDeletionText.rejectedMenuTitle(count: action.count)))
+            .help(action.marksPending
+                ? "Le disque est débranché : les photos de ce filtre seront mises en attente de corbeille, sans toucher aux fichiers. Vous pourrez annuler."
+                : "Les photos de ce filtre vont dans la corbeille du Finder, après confirmation. Vous pourrez annuler.")
+            .accessibilityLabel(Text(verbatim: action.title))
             if showsSlider, let thumbnailWidth {
                 ThumbnailSizeSlider(width: thumbnailWidth)
             }

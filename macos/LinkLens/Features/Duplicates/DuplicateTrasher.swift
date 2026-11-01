@@ -67,6 +67,8 @@ enum TrashSkipReason: Sendable, Equatable {
     case trashRefused(String)
     /// A photo's file is not where it should be inside the gallery's folder (a link leading elsewhere).
     case outsideGallery
+    /// A photo marked for the trash while its disk was unplugged no longer has the size read at import.
+    case changedSinceImport
     case failed(String)
 
     var message: String {
@@ -81,6 +83,7 @@ enum TrashSkipReason: Sendable, Equatable {
         // The system's message ends with a full stop: dropped inside the brackets.
         case .trashRefused(let reason): String(localized: "La corbeille a refusé ce fichier (\(reason.trimmingCharacters(in: CharacterSet(charactersIn: ". ")))). Il est resté à sa place.")
         case .outsideGallery: String(localized: "Ce fichier n'est pas dans le dossier de la galerie : il n'a pas été touché.")
+        case .changedSinceImport: String(localized: "Ce fichier a changé depuis son import (sa taille n'est plus la même) : il est resté à sa place.")
         case .failed(let reason): reason
         }
     }

@@ -693,7 +693,12 @@ private struct ReviewSortingBar: View {
 /// « Mettre les N photos rejetées à la corbeille… »: how many, and what opens the confirmation window.
 struct TrashRejectedAction {
     var count: Int
+    /// The disk is unplugged: the photos will only be marked as waiting for the trash.
+    var marksPending = false
     var perform: () -> Void
+
+    /// « Mettre les 26 photos rejetées à la corbeille… » or « … en attente de corbeille… ».
+    var title: String { PhotoDeletionText.rejectedMenuTitle(count: count, pending: marksPending) }
 }
 
 /// The end of the review: what became of the photos that were « À revoir ».
@@ -740,7 +745,7 @@ struct ReviewSummaryView: View {
             }
             if let trashRejected, trashRejected.count > 0 {
                 Button(role: .destructive, action: trashRejected.perform) {
-                    Label(PhotoDeletionText.rejectedMenuTitle(count: trashRejected.count), systemImage: "trash")
+                    Label(trashRejected.title, systemImage: "trash")
                 }
                 .buttonStyle(.capsule(.destructive))
                 .help("Toutes les photos de la galerie marquées Rejeter, par vous ou par l'IA. Une fenêtre demande confirmation ; vous pourrez annuler.")

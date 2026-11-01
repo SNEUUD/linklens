@@ -76,6 +76,13 @@ final class Photo {
     /// could not be read then. Nil for a photo analysed before batch 3: `DetailsBackfiller` fills it in.
     var detailsReadAt: Date?
 
+    // Pending trash (disk unplugged, F9). Optional: older catalogues get an empty column by themselves.
+    /// When the user asked to put this photo in the trash while its disk was unplugged, nil otherwise.
+    /// No file is touched until the disk is back and the user confirms. Only « Retirer de l'attente »
+    /// (or the photo leaving the catalogue) clears it: P / U / X and a new sorting leave it as it is,
+    /// since the user asked for the trash, not for a verdict.
+    var pendingTrashAt: Date?
+
     init(draft: PhotoDraft) {
         id = draft.id
         relativePath = draft.relativePath
@@ -112,6 +119,9 @@ extension Photo {
     var verdict: CullingVerdict? {
         userVerdict ?? cullingVerdict
     }
+
+    /// Waiting for its disk to come back to go to the trash (see `pendingTrashAt`).
+    var isPendingTrash: Bool { pendingTrashAt != nil }
 
     /// Camera, lens and settings, as read from the EXIF.
     var capture: CaptureInfo {
@@ -223,6 +233,7 @@ struct PhotoSnapshot: Sendable, Equatable {
     var shadowClipping: Double? = nil
     var videoDuration: Double? = nil
     var detailsReadAt: Date? = nil
+    var pendingTrashAt: Date? = nil
 }
 
 extension Photo {
@@ -235,7 +246,7 @@ extension Photo {
             isBestOfBurst: isBestOfBurst, sha256: sha256, userVerdictRaw: userVerdictRaw,
             bestOfBurstChosenAt: bestOfBurstChosenAt, capture: capture, subjectBox: subjectBox,
             highlightClipping: highlightClipping, shadowClipping: shadowClipping,
-            videoDuration: videoDuration, detailsReadAt: detailsReadAt
+            videoDuration: videoDuration, detailsReadAt: detailsReadAt, pendingTrashAt: pendingTrashAt
         )
     }
 
@@ -266,6 +277,7 @@ extension Photo {
         shadowClipping = snapshot.shadowClipping
         videoDuration = snapshot.videoDuration
         detailsReadAt = snapshot.detailsReadAt
+        pendingTrashAt = snapshot.pendingTrashAt
     }
 }
 

@@ -105,7 +105,16 @@ struct GalleryDetailView: View {
         VStack(spacing: 0) {
             // The viewer and the review take the whole window: their own notice replaces the banner.
             if !availability.canUseOriginals, !isFullWindow {
-                UnavailableGalleryBar(availability: availability)
+                UnavailableGalleryBar(availability: availability, pendingCount: pendingPhotos.count)
+            } else if !isFullWindow, photoDeletion.offersPendingTrash(galleryId: gallery.id, pendingCount: pendingPhotos.count) {
+                // The disk is back: only an offer, nothing moves without a click and a confirmation.
+                PendingTrashBar(
+                    count: pendingPhotos.count,
+                    onTrash: canDeletePhotos ? { requestTrashPending() } : nil,
+                    trashHelp: photoDeletion.blockReason(galleryId: gallery.id)
+                        ?? String(localized: "Ouvre la fenêtre de confirmation : chaque fichier est vérifié avant d'aller dans la corbeille du Finder. Vous pourrez annuler."),
+                    onUnmark: { photoDeletion.unmarkPending(pendingPhotos, undoManager: undoManager) }
+                )
             }
             if !photos.isEmpty, !isFullWindow {
                 VerdictFilterBar(
@@ -149,7 +158,11 @@ struct GalleryDetailView: View {
                         photos: selectedPhotos,
                         loader: loader,
                         onTrash: canTrashSelection ? { requestTrash(browser.orderedSelection) } : nil,
-                        trashHelp: trashHelp
+                        trashHelp: trashHelp,
+                        marksPending: marksPending,
+                        onUnmark: selectedPhotos.contains(where: \.isPendingTrash)
+                            ? { photoDeletion.unmarkPending(selectedPhotos, undoManager: undoManager) }
+                            : nil
                     )
                 } else {
                     PhotoInspector(
@@ -438,8 +451,14 @@ struct GalleryDetailView: View {
             reviewTitle: entryPoint?.menuTitle ?? String(localized: "Revoir les photos à revoir…"),
             review: review,
             trashSelection: trashSelection,
-            trashRejectedTitle: PhotoDeletionText.rejectedMenuTitle(count: filterCounts.reject),
+            trashSelectionTitle: marksPending
+                ? String(localized: "Mettre les photos sélectionnées en attente de corbeille…")
+                : String(localized: "Supprimer les photos sélectionnées…"),
+            trashRejectedTitle: trashRejectedAction?.title ?? PhotoDeletionText.rejectedMenuTitle(count: filterCounts.reject, pending: marksPending),
             trashRejected: trashRejected,
+            trashRejectedHelp: marksPending
+                ? String(localized: "Le disque est débranché : les photos marquées Rejeter seront mises en attente de corbeille, sans toucher aux fichiers. Vous pourrez annuler.")
+                : String(localized: "Les photos marquées Rejeter, par vous ou par l'IA, vont dans la corbeille du Finder. Vous pourrez annuler."),
             trashHelp: trashHelp
         )
     }
@@ -459,14 +478,31 @@ struct GalleryDetailView: View {
     private var trashHelp: String {
         if let reason = photoDeletion.blockReason(galleryId: gallery.id) { return reason }
         if browser.selectedIds.isEmpty { return String(localized: "Sélectionnez d'abord des photos (⌘-clic, ⇧-clic, ⌘A).") }
+        if marksPending {
+            return String(localized: "Le disque est débranché : les photos sélectionnées seront mises en attente de corbeille, sans toucher aux fichiers. Vous pourrez annuler.")
+        }
         return String(localized: "Mettre les photos sélectionnées dans la corbeille du Finder, après confirmation. Vous pourrez annuler.")
     }
 
+    /// The disk is unplugged: « Supprimer… » only marks the photos as waiting for the trash.
+    private var marksPending: Bool {
+        photoDeletion.pendingVolumeName(galleryId: gallery.id) != nil
+    }
+
+    /// The photos waiting for their disk to go to the trash, in display order.
+    private var pendingPhotos: [Photo] {
+        photos.filter(\.isPendingTrash)
+    }
+
     /// « Mettre les 26 photos rejetées à la corbeille… »: nil when no photo is « Rejeter » or it is not possible now.
+    /// Disk unplugged: « … en attente de corbeille… », for the rejected photos not marked yet.
     private var trashRejectedAction: TrashRejectedAction? {
-        let count = filterCounts.reject
+        let marksPending = marksPending
+        let count = marksPending
+            ? photos.filter { $0.verdict == .reject && !$0.isPendingTrash }.count
+            : filterCounts.reject
         guard count > 0, canDeletePhotos else { return nil }
-        return TrashRejectedAction(count: count) { requestTrashRejected() }
+        return TrashRejectedAction(count: count, marksPending: marksPending) { requestTrashRejected() }
     }
 
     /// The confirmation window for these photos (display order kept).
@@ -481,6 +517,20 @@ struct GalleryDetailView: View {
 
     private func requestTrashRejected() {
         photoDeletion.requestDeletion(.rejected(in: gallery, photos: photos), undoManager: undoManager)
+    }
+
+    /// The banner's « Mettre à la corbeille… », once the disk is back.
+    private func requestTrashPending() {
+        photoDeletion.requestDeletion(
+            PhotoDeletionRequest(galleryId: gallery.id, galleryName: gallery.name, kind: .pending, items: pendingPhotos.map(\.trashItem)),
+            undoManager: undoManager
+        )
+    }
+
+    /// « Retirer de l'attente de corbeille » of the context menus.
+    private func unmarkPending(_ photoIds: [UUID]) {
+        let ids = Set(photoIds)
+        photoDeletion.unmarkPending(photos.filter { ids.contains($0.id) }, undoManager: undoManager)
     }
 
     /// The selected photos, in display order (the inspector's summary).
@@ -618,10 +668,15 @@ struct GalleryDetailView: View {
                     canUseOriginals: availability.canUseOriginals,
                     cellAspectRatio: cellAspectRatio,
                     minimumCellWidth: thumbnailWidth,
-                    onTrash: canTrashSelection ? { requestTrash($0) } : nil
+                    onTrash: canTrashSelection ? { requestTrash($0) } : nil,
+                    trashMarksPending: marksPending,
+                    onUnmarkPending: { unmarkPending($0) }
                 )
             case .table:
-                GalleryTableView(rows: rows, browser: browser, sorter: sorter, onTrash: canTrashSelection ? { requestTrash($0) } : nil)
+                GalleryTableView(
+                    rows: rows, browser: browser, sorter: sorter, onTrash: canTrashSelection ? { requestTrash($0) } : nil,
+                    trashMarksPending: marksPending, onUnmarkPending: { unmarkPending($0) }
+                )
             }
         }
     }
@@ -692,6 +747,8 @@ private struct ThumbnailTaskKey: Hashable {
 /// on a glass banner like the other floating elements. Same message and advice as before.
 struct UnavailableGalleryBar: View {
     let availability: GalleryAvailability
+    /// Photos marked for the trash while the disk is away: said under the advice.
+    var pendingCount = 0
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -707,6 +764,15 @@ struct UnavailableGalleryBar: View {
                         // Not `.fixedSize`: a text that may grow without limit made SwiftUI ask for a
                         // huge window (see `SidebarLayoutTests`).
                         .lineLimit(3)
+                }
+                if pendingCount > 0 {
+                    Label {
+                        Text(verbatim: PhotoDeletionText.pendingCount(pendingCount) + String(localized: " : la corbeille vous sera proposée au retour du disque."))
+                    } icon: {
+                        Image(systemName: "trash")
+                    }
+                    .foregroundStyle(Palette.review.color)
+                    .lineLimit(2)
                 }
             }
             Spacer(minLength: 0)

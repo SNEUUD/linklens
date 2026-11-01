@@ -23,9 +23,12 @@ struct GalleryMenuActions: Sendable {
     /// « Supprimer les photos sélectionnées… »: the confirmation window for the selection. Nil while
     /// nothing is selected or the photos cannot be deleted (`trashHelp` says why).
     var trashSelection: (@MainActor () -> Void)? = nil
+    /// Disk unplugged: « Mettre les photos sélectionnées en attente de corbeille… ».
+    var trashSelectionTitle = String(localized: "Supprimer les photos sélectionnées…")
     /// « Mettre les 26 photos rejetées à la corbeille… ». Nil when no photo is « Rejeter ».
     var trashRejectedTitle = PhotoDeletionText.rejectedMenuTitle(count: 0)
     var trashRejected: (@MainActor () -> Void)? = nil
+    var trashRejectedHelp = String(localized: "Les photos marquées Rejeter, par vous ou par l'IA, vont dans la corbeille du Finder. Vous pourrez annuler.")
     var trashHelp = ""
 }
 
@@ -108,13 +111,13 @@ struct GalleryMenuCommands: View {
         // ⌘⌫ (`.delete` is the ⌫ key) goes to the photos when they have the keyboard, else to the gallery.
         // Always through a confirmation window: nothing is deleted at once.
         let target = DeleteShortcutTarget(photosHaveFocus: photosHaveFocus == true)
-        Button("Supprimer les photos sélectionnées…") { actions?.trashSelection?() }
+        Button(actions?.trashSelectionTitle ?? String(localized: "Supprimer les photos sélectionnées…")) { actions?.trashSelection?() }
             .keyboardShortcut(target.shortcut(for: .photos))
             .disabled(actions?.trashSelection == nil)
             .help(actions?.trashHelp ?? "")
         Button(actions?.trashRejectedTitle ?? PhotoDeletionText.rejectedMenuTitle(count: 0)) { actions?.trashRejected?() }
             .disabled(actions?.trashRejected == nil)
-            .help("Les photos marquées Rejeter, par vous ou par l'IA, vont dans la corbeille du Finder. Vous pourrez annuler.")
+            .help(actions?.trashRejectedHelp ?? "")
         Button("Supprimer la galerie…") { actions?.delete?() }
             .keyboardShortcut(target.shortcut(for: .gallery))
             .disabled(actions?.delete == nil)

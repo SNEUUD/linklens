@@ -12,6 +12,10 @@ struct GalleryTableView: View {
     let sorter: ManualSorter
     /// « Mettre à la corbeille… » of the context menu, with the rows it is about. Nil hides it.
     var onTrash: (([UUID]) -> Void)? = nil
+    /// The disk is unplugged: « Mettre en attente de corbeille… » instead of « Mettre à la corbeille… ».
+    var trashMarksPending = false
+    /// « Retirer de l'attente de corbeille », with the rows it is about.
+    var onUnmarkPending: (([UUID]) -> Void)? = nil
 
     var body: some View {
         // A `Set` as selection lets the table select several rows, with the usual Mac clicks and keys.
@@ -19,18 +23,31 @@ struct GalleryTableView: View {
             // The table resizes every column together: the others are capped (`max`) so that
             // "Raison" takes the remaining space. The window minimum width is the sum of the `min`s.
             TableColumn("Fichier") { row in
-                Text(verbatim: row.photo.relativePath)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(row.photo.relativePath)
+                HStack(spacing: 4) {
+                    if row.photo.isPendingTrash {
+                        Image(systemName: "trash.fill")
+                            .foregroundStyle(Palette.review.color)
+                            .help(PendingTrashText.badgeHelp)
+                            .accessibilityLabel(Text(verbatim: PendingTrashText.accessibilityLabel))
+                    }
+                    Text(verbatim: row.photo.relativePath)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(row.photo.relativePath)
+                        // Dimmed like the grid's thumbnail.
+                        .foregroundStyle(row.photo.isPendingTrash ? .secondary : .primary)
+                }
                     // VoiceOver lists these in the actions of the row's first cell.
                     .accessibilityActions {
                         SortingButtons { command in sorter.apply(command, to: [row.photo.id]) }
                         if let burst = row.entry.burst {
                             BurstCoverButtons(burst: burst) { command in sorter.apply(command, to: row.photo.id) }
                         }
-                        if let onTrash {
-                            Button(PhotoDeletionText.trashMenuTitle(count: 1)) { onTrash([row.photo.id]) }
+                        if let onUnmarkPending, row.photo.isPendingTrash {
+                            Button(PhotoDeletionText.unmarkMenuTitle(count: 1)) { onUnmarkPending([row.photo.id]) }
+                        }
+                        if let onTrash, !(trashMarksPending && row.photo.isPendingTrash) {
+                            Button(PhotoDeletionText.trashMenuTitle(count: 1, pending: trashMarksPending)) { onTrash([row.photo.id]) }
                         }
                     }
             }
@@ -89,9 +106,17 @@ struct GalleryTableView: View {
                         Button("Sélectionner toute la rafale") { browser.selectWholeBurst(burst.number) }
                     }
                 }
-                if let onTrash {
+                let pending = rows.filter { ids.contains($0.id) && $0.photo.isPendingTrash }.map(\.id)
+                if onTrash != nil || !pending.isEmpty {
                     Divider()
-                    Button(PhotoDeletionText.trashMenuTitle(count: ids.count), systemImage: "trash", role: .destructive) {
+                }
+                if let onUnmarkPending, !pending.isEmpty {
+                    Button(PhotoDeletionText.unmarkMenuTitle(count: pending.count), systemImage: "arrow.uturn.backward") {
+                        onUnmarkPending(pending)
+                    }
+                }
+                if let onTrash, !(trashMarksPending && pending.count == ids.count) {
+                    Button(PhotoDeletionText.trashMenuTitle(count: ids.count, pending: trashMarksPending), systemImage: "trash", role: .destructive) {
                         onTrash(ordered)
                     }
                 }

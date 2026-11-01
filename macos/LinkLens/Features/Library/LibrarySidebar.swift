@@ -242,6 +242,18 @@ private struct GallerySidebarRow: View {
                     if gallery.culledAt != nil || summary.isSorted {
                         VerdictBar(summary: summary)
                     }
+                    let pendingCount = photos.count { $0.isPendingTrash }
+                    if pendingCount > 0 {
+                        // An `HStack` rather than a `Label`: in a sidebar, a label's icon takes the accent colour.
+                        HStack(spacing: Spacing.xSmall) {
+                            Image(systemName: "trash")
+                            Text(verbatim: PhotoDeletionText.pendingShort(pendingCount))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(Palette.review.color)
+                        .lineLimit(1)
+                        .help(PendingTrashText.badgeHelp)
+                    }
                 }
             }
         }

@@ -9,7 +9,11 @@ struct PhotoDeletionSheet: View {
     var body: some View {
         Group {
             if let request = controller.request {
-                PhotoDeletionForm(request: request, cache: cache)
+                if case .markPending(let volumeName) = request.action {
+                    PendingTrashForm(request: request, volumeName: volumeName, cache: cache)
+                } else {
+                    PhotoDeletionForm(request: request, cache: cache)
+                }
             } else if let report = controller.report {
                 PhotoDeletionReportView(report: report)
             }
@@ -36,11 +40,17 @@ private struct PhotoDeletionForm: View {
                 subtitle: Text(verbatim: PhotoDeletionText.filesSummary(count: request.count, bytes: request.totalBytes))
             )
 
-            PreviewStrip(items: request.previews, total: request.count, cache: cache)
+            PhotoTrashPreviewStrip(items: request.previews, total: request.count, cache: cache)
 
             if request.kind == .rejected {
                 MessageBox(systemImage: "xmark.circle.fill", tint: Palette.reject, soft: Palette.rejectSoft) {
                     Text("Ce sont les photos marquées Rejeter, par vous ou par l'IA. Vérifiez-les d'abord avec le filtre Rejeter (⌘4) : l'IA peut se tromper.")
+                }
+            }
+
+            if request.kind == .pending {
+                MessageBox(systemImage: "clock", tint: Palette.review, soft: Palette.reviewSoft) {
+                    Text("Ce sont les photos mises en attente pendant que le disque était débranché. Juste avant de déplacer chaque fichier, LinkLens vérifie qu'il est toujours dans le dossier de la galerie et qu'il a la taille relevée à l'import : un fichier modifié ou disparu reste à sa place.")
                 }
             }
 
@@ -54,8 +64,8 @@ private struct PhotoDeletionForm: View {
 
             if missing > 0 {
                 Text(missing > 1
-                     ? "\(missing) fichiers sont introuvables dans le dossier : ils ne seront pas touchés."
-                     : "1 fichier est introuvable dans le dossier : il ne sera pas touché.")
+                     ? "\(missing) fichiers sont introuvables ou ont changé depuis l'import : ils ne seront pas touchés."
+                     : "1 fichier est introuvable ou a changé depuis l'import : il ne sera pas touché.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -94,7 +104,7 @@ private struct PhotoDeletionForm: View {
 }
 
 /// The first photos as small thumbnails, and « +7 » for the others.
-private struct PreviewStrip: View {
+struct PhotoTrashPreviewStrip: View {
     let items: [PhotoTrashItem]
     let total: Int
     let cache: ThumbnailCache
@@ -172,6 +182,12 @@ private struct PhotoDeletionReportView: View {
             if report.trashWasRefused {
                 MessageBox(systemImage: "externaldrive.badge.exclamationmark", tint: Palette.review, soft: Palette.reviewSoft) {
                     Text("Ce disque n'a peut-être pas de corbeille (format exFAT ou FAT, disque réseau). LinkLens ne supprime jamais un fichier définitivement à la place de la corbeille : ces fichiers n'ont pas bougé. Vous pouvez les retirer de LinkLens en gardant les fichiers, puis les supprimer vous-même depuis le Finder.")
+                }
+            }
+
+            if report.keepsPendingMarks {
+                MessageBox(systemImage: "clock", tint: Palette.review, soft: Palette.reviewSoft) {
+                    Text("Les photos restées à leur place restent en attente de corbeille, jusqu'à ce que vous choisissiez : « Retirer seulement de LinkLens » ici, ou « Retirer de l'attente » au-dessus des photos.")
                 }
             }
 
@@ -283,9 +299,14 @@ struct PhotoSelectionSummary: View {
     /// Nil while the photos cannot be put in the trash (`trashHelp` says why).
     let onTrash: (() -> Void)?
     let trashHelp: String
+    /// The disk is unplugged: the button only marks the photos as waiting for the trash.
+    var marksPending = false
+    /// « Retirer de l'attente de corbeille », nil when none of these photos is waiting.
+    var onUnmark: (() -> Void)? = nil
 
     var body: some View {
         let counts = VerdictCounts(photos)
+        let pendingCount = photos.filter(\.isPendingTrash).count
         let bytes = photos.reduce(0) { $0 + $1.fileSize }
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -333,11 +354,22 @@ struct PhotoSelectionSummary: View {
                 Button(role: .destructive) {
                     onTrash?()
                 } label: {
-                    Label(PhotoDeletionText.trashMenuTitle(count: photos.count), systemImage: "trash")
+                    Label(PhotoDeletionText.trashMenuTitle(count: photos.count, pending: marksPending), systemImage: "trash")
                 }
                 .buttonStyle(.capsule(.destructive))
                 .disabled(onTrash == nil)
                 .help(trashHelp)
+
+                if pendingCount > 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(PhotoDeletionText.pendingCount(pendingCount), systemImage: "trash")
+                            .foregroundStyle(Palette.review.color)
+                        if let onUnmark {
+                            Button(PhotoDeletionText.unmarkMenuTitle(count: pendingCount), action: onUnmark)
+                                .buttonStyle(.capsule(.secondary, size: .small))
+                        }
+                    }
+                }
             }
             .padding(16)
         }

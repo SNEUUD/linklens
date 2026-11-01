@@ -10,6 +10,16 @@ struct PhotoDeletionRequest: Sendable, Equatable, Identifiable {
         case selection
         /// Every photo whose verdict shown is « Rejeter » (the user's choice, otherwise the AI's).
         case rejected
+        /// The photos marked while the disk was unplugged, now that it is back (the gallery's banner).
+        case pending
+    }
+
+    /// What confirming does.
+    enum Action: Sendable, Equatable {
+        case moveToTrash
+        /// The gallery's disk is unplugged (F9): the photos are only marked as waiting for the trash,
+        /// no file is touched. The trash is offered again when the disk is back.
+        case markPending(volumeName: String)
     }
 
     var id = UUID()
@@ -18,6 +28,10 @@ struct PhotoDeletionRequest: Sendable, Equatable, Identifiable {
     var kind: Kind
     /// In display order: the window shows the first ones.
     var items: [PhotoTrashItem]
+    /// Set by `PhotoDeletionController.requestDeletion` from the disk's state.
+    var action = Action.moveToTrash
+
+    var marksPending: Bool { action != .moveToTrash }
 
     var count: Int { items.count }
     var videoCount: Int { items.filter(\.isVideo).count }
@@ -35,7 +49,10 @@ struct PhotoDeletionRequest: Sendable, Equatable, Identifiable {
 
 extension Photo {
     var trashItem: PhotoTrashItem {
-        PhotoTrashItem(photoId: id, relativePath: relativePath, fileSize: fileSize, isVideo: mediaKind == .video)
+        PhotoTrashItem(
+            photoId: id, relativePath: relativePath, fileSize: fileSize, isVideo: mediaKind == .video,
+            isPendingTrash: isPendingTrash
+        )
     }
 }
 
@@ -49,6 +66,11 @@ struct PhotoDeletionReport: Sendable, Equatable, Identifiable {
     var skipped: [SkippedPhoto]
     /// Not reached because « Annuler » was clicked in the progress pill (not touched, still in LinkLens).
     var notReachedCount = 0
+
+    /// Some files that stayed were waiting for the trash (disk unplugged then): they still are.
+    var keepsPendingMarks: Bool {
+        skipped.contains { $0.item.isPendingTrash }
+    }
 
     /// The trash said no to at least one file: probably a disk without a trash (exFAT, FAT, network).
     var trashWasRefused: Bool {
@@ -140,6 +162,8 @@ final class PhotoDeletionController {
     @ObservationIgnored private var workTask: Task<Void, Never>?
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
     @ObservationIgnored private var undoTasks: [UUID: Task<Void, Never>] = [:]
+    /// The last write of pending marks; each new one waits for it, so an undo lands after its action.
+    @ObservationIgnored private var pendingWrite: Task<Void, Never>?
 
     init(
         store: LibraryStore,
@@ -161,9 +185,10 @@ final class PhotoDeletionController {
 
     // MARK: - Confirmation window
 
-    /// Why the photos of this gallery cannot be deleted now, nil when they can.
+    /// Why the photos of this gallery cannot be deleted now, nil when they can. While the disk is
+    /// unplugged they can still be marked as waiting for the trash (`pendingVolumeName`).
     func blockReason(galleryId: UUID) -> String? {
-        if let help = galleryAvailability(galleryId).help(for: .trash) { return help }
+        if pendingVolumeName(galleryId: galleryId) == nil, let help = galleryAvailability(galleryId).help(for: .trash) { return help }
         if isBusy(galleryId) {
             return String(localized: "Attendez la fin de l'indexation, du tri ou de l'export de cette galerie.")
         }
@@ -175,13 +200,32 @@ final class PhotoDeletionController {
         request == nil && report == nil && blockReason(galleryId: galleryId) == nil
     }
 
+    /// The disk's name while the gallery's disk is unplugged: deleting then only marks the photos as
+    /// waiting for the trash. Nil when the files can be moved (or the folder itself is missing).
+    func pendingVolumeName(galleryId: UUID) -> String? {
+        if case .diskDisconnected(let volumeName) = galleryAvailability(galleryId) { volumeName } else { nil }
+    }
+
     /// Opens the confirmation window, then reads the size and date of each file in the background.
+    /// Disk unplugged: the marking window instead, for the photos not marked yet, and no file is read.
     func requestDeletion(_ request: PhotoDeletionRequest, undoManager: UndoManager?) {
+        var request = request
+        if let volumeName = pendingVolumeName(galleryId: request.galleryId) {
+            request.action = .markPending(volumeName: volumeName)
+            request.items.removeAll { $0.isPendingTrash }
+        } else {
+            request.action = .moveToTrash
+        }
         guard !request.items.isEmpty, canRequest(galleryId: request.galleryId) else { return }
         self.request = request
         self.undoManager = undoManager
         stamps = nil
         errorMessage = nil
+        guard !request.marksPending else {
+            // Nothing to read: the disk is not there, and marking touches no file.
+            stamps = [:]
+            return
+        }
         inspectTask = Task {
             let read = await readStamps(of: request)
             guard self.request?.id == request.id else { return }
@@ -201,6 +245,10 @@ final class PhotoDeletionController {
     /// window closes and the progress pill takes over.
     func confirm() {
         guard let request, workTask == nil else { return }
+        if request.marksPending {
+            markPending(request)
+            return
+        }
         workTask = Task {
             defer { workTask = nil }
             await trash(request)
@@ -341,6 +389,68 @@ final class PhotoDeletionController {
         let isAccessing = folder.startAccessingSecurityScopedResource()
         defer { if isAccessing { folder.stopAccessingSecurityScopedResource() } }
         return await PhotoTrasher.stamps(of: request.items, in: folder)
+    }
+
+    // MARK: - Pending trash (disk unplugged)
+
+    /// The marking window's « Mettre en attente »: the photos are marked, no file is touched. ⌘Z undoes it.
+    private func markPending(_ request: PhotoDeletionRequest) {
+        self.request = nil
+        stamps = nil
+        let now = Date.now
+        let ids = request.items.map(\.photoId)
+        setPendingTrash(
+            ids.map { PendingTrashChange(photoId: $0, pendingTrashAt: now) },
+            previous: ids.map { PendingTrashChange(photoId: $0, pendingTrashAt: nil) },
+            actionName: PhotoDeletionText.undoActionName(markedPending: ids.count),
+            undoManager: undoManager
+        )
+        AccessibilityNotification.Announcement(PhotoDeletionText.pendingCount(ids.count)).post()
+    }
+
+    /// « Retirer de l'attente »: the photos stay in LinkLens and on the disk, and are no longer marked.
+    /// Undoable. Only the photos marked now count.
+    func unmarkPending(_ photos: [Photo], undoManager: UndoManager?) {
+        let marked = photos.filter(\.isPendingTrash)
+        guard !marked.isEmpty else { return }
+        setPendingTrash(
+            marked.map { PendingTrashChange(photoId: $0.id, pendingTrashAt: nil) },
+            previous: marked.map { PendingTrashChange(photoId: $0.id, pendingTrashAt: $0.pendingTrashAt) },
+            actionName: PhotoDeletionText.undoActionName(unmarkedPending: marked.count),
+            undoManager: undoManager
+        )
+    }
+
+    /// The gallery's banner offers to put the marked photos in the trash only while the files can be
+    /// moved. Nothing is ever moved without the user's click, not even when the disk comes back.
+    func offersPendingTrash(galleryId: UUID, pendingCount: Int) -> Bool {
+        pendingCount > 0 && galleryAvailability(galleryId).canUseOriginals
+    }
+
+    /// Writes the new marks through `LibraryStore` (in the background, one write after the other), and
+    /// registers their opposite on the undo manager right away, while the key press or click is still
+    /// being handled: an undo registered after an `await` would be recorded as a new action, not a redo.
+    private func setPendingTrash(_ changes: [PendingTrashChange], previous: [PendingTrashChange], actionName: String, undoManager: UndoManager?) {
+        if let undoManager {
+            // While undoing or redoing, the undo manager has its own group open (it becomes the redo).
+            let needsGroup = !undoManager.isUndoing && !undoManager.isRedoing
+            // See « Piège des tests avec annulation » in macos/CLAUDE.md.
+            if needsGroup { undoManager.beginUndoGrouping() }
+            undoManager.registerUndo(withTarget: self) { [weak undoManager] controller in
+                controller.setPendingTrash(previous, previous: changes, actionName: actionName, undoManager: undoManager)
+            }
+            undoManager.setActionName(actionName)
+            if needsGroup { undoManager.endUndoGrouping() }
+        }
+        let earlier = pendingWrite
+        pendingWrite = Task {
+            await earlier?.value
+            do {
+                try await store.setPendingTrash(changes)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     // MARK: - Undo
@@ -485,6 +595,7 @@ final class PhotoDeletionController {
     /// Waits for the running reading, deletion and undos (used by the tests).
     func waitUntilIdle() async {
         await inspectTask?.value
+        await pendingWrite?.value
         while let task = workTask ?? undoTasks.values.first {
             await task.value
         }

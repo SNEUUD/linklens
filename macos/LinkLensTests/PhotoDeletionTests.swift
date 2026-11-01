@@ -266,7 +266,7 @@ struct PhotoTrashCheckTests {
 @MainActor
 struct PhotoDeletionControllerTests {
     @Test func trashesTheSelectionAndUndoesEverything() async throws {
-        let setup = try await Setup.make(files: ["DSC1.JPG", "DSC2.JPG", "DSC3.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["DSC1.JPG", "DSC2.JPG", "DSC3.JPG"])
         defer { setup.remove() }
         try await setup.sortLikeAUser()
         let before = try setup.catalogue()
@@ -305,7 +305,7 @@ struct PhotoDeletionControllerTests {
 
     @Test func theRealTrashTakesTheFileAndGivesItBack() async throws {
         let name = "DSC-\(UUID().uuidString.prefix(8)).JPG"
-        let setup = try await Setup.make(files: [name], trash: { _ in FinderTrash() })
+        let setup = try await PhotoDeletionSetup.make(files: [name], trash: { _ in FinderTrash() })
         defer { setup.remove() }
         let files = try setup.folder.snapshot()
         try await setup.open(try setup.ids([name]))
@@ -322,7 +322,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func rejectedMeansTheVerdictShownUserChoiceFirst() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG", "C.JPG", "D.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG", "C.JPG", "D.JPG"])
         defer { setup.remove() }
         let ids = try setup.ids(["A.JPG", "B.JPG", "C.JPG", "D.JPG"])
         try await setup.store.saveCulling([
@@ -344,20 +344,22 @@ struct PhotoDeletionControllerTests {
         #expect(PhotoDeletionText.title(count: 2, kind: .rejected) == "Mettre les 2 photos rejetées à la corbeille ?")
     }
 
-    @Test func anUnpluggedDiskGreysTheActionOut() async throws {
-        let setup = try await Setup.make(files: ["A.JPG"])
+    /// A missing folder greys the action out. (An unplugged disk only marks the photos as waiting for the
+    /// trash: see `PendingTrashTests`.)
+    @Test func aMissingFolderGreysTheActionOut() async throws {
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG"])
         defer { setup.remove() }
-        let unplugged = GalleryAvailability.diskDisconnected(volumeName: "DATA")
-        setup.controller.galleryAvailability = { _ in unplugged }
+        let missing = GalleryAvailability.folderMissing
+        setup.controller.galleryAvailability = { _ in missing }
 
         #expect(!setup.controller.canRequest(galleryId: setup.galleryId))
-        #expect(setup.controller.blockReason(galleryId: setup.galleryId) == unplugged.help(for: .trash))
+        #expect(setup.controller.blockReason(galleryId: setup.galleryId) == missing.help(for: .trash))
         setup.controller.requestDeletion(try setup.request(setup.ids(["A.JPG"])), undoManager: setup.undoManager)
         #expect(setup.controller.request == nil, "no window")
     }
 
     @Test func aDiskUnpluggedAfterTheWindowOpenedStopsEverything() async throws {
-        let setup = try await Setup.make(files: ["A.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG"])
         defer { setup.remove() }
         let files = try setup.folder.snapshot()
         try await setup.open(try setup.ids(["A.JPG"]))
@@ -372,7 +374,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func aFileChangedSinceTheWindowOpenedStaysInPlace() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG", "C.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG", "C.JPG"])
         defer { setup.remove() }
         try await setup.open(try setup.ids(["A.JPG", "B.JPG", "C.JPG"]))
         // B: rewritten with other content (another size). C: same size, another date (edited in place).
@@ -391,7 +393,7 @@ struct PhotoDeletionControllerTests {
 
     @Test func aRefusedTrashNeverDeletesAndOffersToRemoveFromLinkLensOnly() async throws {
         // As on an exFAT disk without a trash: `trashItem` throws.
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG"], trash: { _ in RefusingTrash() })
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG"], trash: { _ in RefusingTrash() })
         defer { setup.remove() }
         let files = try setup.folder.snapshot()
         let before = try setup.catalogue()
@@ -423,7 +425,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func aPartlyRefusedTrashKeepsTheOthersUndoable() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG", "C.JPG"], trash: { SelectiveTrash(refused: "B.JPG", base: FolderTrash(directory: $0)) })
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG", "C.JPG"], trash: { SelectiveTrash(refused: "B.JPG", base: FolderTrash(directory: $0)) })
         defer { setup.remove() }
         let files = try setup.folder.snapshot()
         try await setup.open(try setup.ids(["A.JPG", "B.JPG", "C.JPG"]))
@@ -442,7 +444,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func removingFromLinkLensOnlyFromTheWindowKeepsTheFiles() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG"])
         defer { setup.remove() }
         let files = try setup.folder.snapshot()
         try await setup.open(try setup.ids(["A.JPG"]))
@@ -454,7 +456,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func theBestPhotoOfABurstGoingGivesTheStarToTheNextBestAndUndoTakesItBack() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG", "C.JPG", "D.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG", "C.JPG", "D.JPG"])
         defer { setup.remove() }
         let ids = try setup.ids(["A.JPG", "B.JPG", "C.JPG", "D.JPG"])
         // A, B, C: a burst whose best photo is A. B is « À revoir » with a better score than C (« Garder »).
@@ -486,7 +488,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func aBurstLeftWithOnePhotoIsShownAlone() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG", "C.JPG"])
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG", "C.JPG"])
         defer { setup.remove() }
         let ids = try setup.ids(["A.JPG", "B.JPG", "C.JPG"])
         try await setup.store.saveCulling(ids.enumerated().map { index, id in
@@ -502,7 +504,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func thumbnailsLeaveTheCacheOnlyAtTheEndOfTheUndoPeriod() async throws {
-        let setup = try await Setup.make(files: ["A.JPG", "B.JPG"], undoPeriod: .milliseconds(300))
+        let setup = try await PhotoDeletionSetup.make(files: ["A.JPG", "B.JPG"], undoPeriod: .milliseconds(300))
         defer { setup.remove() }
         let thumbnails = try setup.addThumbnails()
         let trashedId = try setup.ids(["A.JPG"])[0]
@@ -528,7 +530,7 @@ struct PhotoDeletionControllerTests {
     // MARK: Large selections
 
     @Test func twelveHundredFilesGoThroughTheProgressAndComeBack() async throws {
-        let setup = try await Setup.makeLarge(count: 1_200)
+        let setup = try await PhotoDeletionSetup.makeLarge(count: 1_200)
         defer { setup.remove() }
         let ids = try setup.catalogue().map(\.id)
         let files = try setup.folder.snapshot()
@@ -556,7 +558,7 @@ struct PhotoDeletionControllerTests {
     }
 
     @Test func cancellingStopsAfterTheCurrentFileAndKeepsItUndoable() async throws {
-        let setup = try await Setup.makeLarge(count: 1_200, trash: { CancellingTrash(base: FolderTrash(directory: $0)) })
+        let setup = try await PhotoDeletionSetup.makeLarge(count: 1_200, trash: { CancellingTrash(base: FolderTrash(directory: $0)) })
         defer { setup.remove() }
         let ids = try setup.catalogue().map(\.id)
         try await setup.open(ids)
@@ -644,10 +646,10 @@ struct CancellingTrash: FileTrashing {
     }
 }
 
-// MARK: - Setup
+// MARK: - PhotoDeletionSetup
 
 @MainActor
-private struct Setup {
+struct PhotoDeletionSetup {
     let folder: TestFolder
     let trashFolder: TestFolder
     let container: ModelContainer
@@ -663,7 +665,7 @@ private struct Setup {
         files: [String],
         trash: (URL) -> any FileTrashing = { FolderTrash(directory: $0) },
         undoPeriod: Duration = .seconds(600)
-    ) async throws -> Setup {
+    ) async throws -> PhotoDeletionSetup {
         let folder = try TestFolder()
         for (index, name) in files.enumerated() {
             try folder.writeJPEG(name, exifDate: String(format: "2026:09:20 14:40:%02d", index))
@@ -678,7 +680,7 @@ private struct Setup {
 
     /// `count` tiny files (not images) inserted straight into the catalogue: indexing them would only
     /// slow the test down.
-    static func makeLarge(count: Int, trash: (URL) -> any FileTrashing = { FolderTrash(directory: $0) }) async throws -> Setup {
+    static func makeLarge(count: Int, trash: (URL) -> any FileTrashing = { FolderTrash(directory: $0) }) async throws -> PhotoDeletionSetup {
         let folder = try TestFolder()
         let base = try base(folder: folder, trash: trash, undoPeriod: .seconds(600))
         let galleryId = try await base.store.createGallery(
@@ -700,7 +702,7 @@ private struct Setup {
         return base.with(galleryId)
     }
 
-    private static func base(folder: TestFolder, trash: (URL) -> any FileTrashing, undoPeriod: Duration) throws -> Setup {
+    private static func base(folder: TestFolder, trash: (URL) -> any FileTrashing, undoPeriod: Duration) throws -> PhotoDeletionSetup {
         let trashFolder = try TestFolder()
         let container = try makeInMemoryContainer()
         let store = LibraryStore(modelContainer: container)
@@ -716,14 +718,14 @@ private struct Setup {
         let undoManager = UndoManager()
         // As in the app's other undo tests: no automatic grouping by event in a test.
         undoManager.groupsByEvent = false
-        return Setup(
+        return PhotoDeletionSetup(
             folder: folder, trashFolder: trashFolder, container: container, store: store, cache: cache, queue: queue,
             controller: controller, undoManager: undoManager, galleryId: UUID()
         )
     }
 
-    private func with(_ galleryId: UUID) -> Setup {
-        Setup(
+    private func with(_ galleryId: UUID) -> PhotoDeletionSetup {
+        PhotoDeletionSetup(
             folder: folder, trashFolder: trashFolder, container: container, store: store, cache: cache, queue: queue,
             controller: controller, undoManager: undoManager, galleryId: galleryId
         )

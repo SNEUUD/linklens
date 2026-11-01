@@ -248,6 +248,13 @@ struct PhotoViewer: View {
             .resizable()
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: Radius.small))
+            // Waiting for its disk to go to the trash: dimmed, with the bin in the corner.
+            .opacity(photo.isPendingTrash ? PendingTrashStyle.opacity : 1)
+            .overlay(alignment: .topLeading) {
+                if photo.isPendingTrash {
+                    PendingTrashBadge(size: 30).padding(12)
+                }
+            }
             .overlay {
                 if let subject {
                     // Placed in the coordinates of the drawn photo, as in the inspector.
@@ -262,7 +269,8 @@ struct PhotoViewer: View {
             .help(canZoom(photo) ? "Double-cliquez ou appuyez sur Z pour voir la photo à 100 %" : "")
             // VoiceOver: « DSC04311.ARW, Garder », then the reason; the sorting keys as actions.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: "\(photo.fileName), \(photo.verdictDescription ?? String(localized: "pas encore triée"))"))
+            .accessibilityLabel(Text(verbatim: "\(photo.fileName), \(photo.verdictDescription ?? String(localized: "pas encore triée"))"
+                + (photo.isPendingTrash ? ", " + PendingTrashText.accessibilityLabel : "")))
             .accessibilityValue(Text(verbatim: accessibilityValue(line: line, subject: subject)))
             .accessibilityAddTraits(.isImage)
             .accessibilityActions {

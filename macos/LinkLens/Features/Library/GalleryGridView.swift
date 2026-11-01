@@ -21,6 +21,10 @@ struct GalleryGridView: View {
     var minimumCellWidth = ThumbnailSize.standard
     /// « Mettre à la corbeille… » of the context menu, with the photos it is about. Nil hides it.
     var onTrash: (([UUID]) -> Void)? = nil
+    /// The disk is unplugged: « Mettre en attente de corbeille… » instead of « Mettre à la corbeille… ».
+    var trashMarksPending = false
+    /// « Retirer de l'attente de corbeille », with the photos it is about (only those waiting are changed).
+    var onUnmarkPending: (([UUID]) -> Void)? = nil
     // `@FocusState` tracks whether this view has the keyboard focus (like `document.activeElement`).
     @FocusState private var isFocused: Bool
 
@@ -65,7 +69,10 @@ struct GalleryGridView: View {
                                     browser.selectWholeBurst(number)
                                     isFocused = true
                                 },
-                                onTrash: onTrash.map { trash in { trash(targets(of: photo.id)) } }
+                                onTrash: onTrash.map { trash in { trash(targets(of: photo.id)) } },
+                                trashMarksPending: trashMarksPending,
+                                pendingTargetCount: { pendingTargets(of: photo.id).count },
+                                onUnmarkPending: onUnmarkPending.map { unmark in { unmark(pendingTargets(of: photo.id)) } }
                             )
                                 .id(photo.id)
                                 .onTapGesture(count: 2) { browser.openViewer(on: photo.id) }
@@ -136,6 +143,12 @@ struct GalleryGridView: View {
     private func targets(of photoId: UUID) -> [UUID] {
         browser.selectedIds.contains(photoId) ? browser.orderedSelection : [photoId]
     }
+
+    /// The targets that wait for the trash (disk unplugged when they were marked).
+    private func pendingTargets(of photoId: UUID) -> [UUID] {
+        let ids = Set(targets(of: photoId))
+        return rows.filter { ids.contains($0.id) && $0.photo.isPendingTrash }.map(\.id)
+    }
 }
 
 extension GalleryBrowser.ClickModifier {
@@ -170,6 +183,10 @@ private struct ThumbnailCell: View {
     let onSelectWholeBurst: (Int) -> Void
     /// « Mettre à la corbeille… », nil while it is not possible here.
     let onTrash: (() -> Void)?
+    let trashMarksPending: Bool
+    /// How many of the targets wait for the trash (read when the context menu opens).
+    let pendingTargetCount: () -> Int
+    let onUnmarkPending: (() -> Void)?
     // Local state of the cell, like `useState`: the image once loaded.
     @State private var loadedImage: CGImage?
 
@@ -200,7 +217,7 @@ private struct ThumbnailCell: View {
         }
         .contentShape(Rectangle())
         // Tooltip on hover: the verdict (and who chose it) and every reason of the AI.
-        .help(([photo.verdictDescription, outsideFilterNote].compactMap { $0 } + messages).joined(separator: "\n"))
+        .help(([photo.verdictDescription, pendingNote, outsideFilterNote].compactMap { $0 } + messages).joined(separator: "\n"))
         .contextMenu {
             let count = targets().count
             if count > 1 {
@@ -215,9 +232,16 @@ private struct ThumbnailCell: View {
                     Button("Sélectionner toute la rafale") { onSelectWholeBurst(burst.number) }
                 }
             }
-            if let onTrash {
+            let pendingCount = pendingTargetCount()
+            if onTrash != nil || pendingCount > 0 {
                 Divider()
-                Button(PhotoDeletionText.trashMenuTitle(count: count), systemImage: "trash", role: .destructive, action: onTrash)
+            }
+            if let onUnmarkPending, pendingCount > 0 {
+                Button(PhotoDeletionText.unmarkMenuTitle(count: pendingCount), systemImage: "arrow.uturn.backward", action: onUnmarkPending)
+            }
+            // Once every target waits for the trash, marking them again would do nothing.
+            if let onTrash, !(trashMarksPending && pendingCount == count) {
+                Button(PhotoDeletionText.trashMenuTitle(count: count, pending: trashMarksPending), systemImage: "trash", role: .destructive, action: onTrash)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -232,8 +256,11 @@ private struct ThumbnailCell: View {
                 }
                 BurstCoverButtons(burst: burst, action: onBurstCover)
             }
-            if let onTrash {
-                Button(PhotoDeletionText.trashMenuTitle(count: targets().count), action: onTrash)
+            if let onUnmarkPending, photo.isPendingTrash {
+                Button(PhotoDeletionText.unmarkMenuTitle(count: pendingTargetCount()), action: onUnmarkPending)
+            }
+            if let onTrash, !(trashMarksPending && photo.isPendingTrash) {
+                Button(PhotoDeletionText.trashMenuTitle(count: targets().count, pending: trashMarksPending), action: onTrash)
             }
         }
         // `.task(id:)` runs async work when the cell appears and cancels it when it scrolls away,
@@ -255,7 +282,8 @@ private struct ThumbnailCell: View {
         // cropped by `clipShape` (CSS `object-fit: cover`) or be shown whole (`contain`).
         return Color.clear
             .aspectRatio(cellAspectRatio, contentMode: .fit)
-            .overlay { photoContent(image) }
+            // Only the photo is dimmed while it waits for the trash: its badges stay readable.
+            .overlay { photoContent(image).opacity(photo.isPendingTrash ? PendingTrashStyle.opacity : 1) }
             .clipShape(shape)
             .shadow(color: .black.opacity(isSelected ? 0.18 : 0.12), radius: isSelected ? 9 : 4, y: isSelected ? 6 : 2)
             .background(alignment: .top) {
@@ -288,13 +316,18 @@ private struct ThumbnailCell: View {
                 }
             }
             .overlay(alignment: .bottomLeading) {
-                if photo.mediaKind == .video {
-                    Image(systemName: "video.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .photoBadge()
-                        .padding(7)
-                        .accessibilityHidden(true)
+                HStack(spacing: 5) {
+                    if photo.isPendingTrash {
+                        PendingTrashBadge()
+                    }
+                    if photo.mediaKind == .video {
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .photoBadge()
+                            .accessibilityHidden(true)
+                    }
                 }
+                .padding(7)
             }
     }
 
@@ -326,6 +359,11 @@ private struct ThumbnailCell: View {
         return String(localized: "\(name) · rafale de \(burst.count)")
     }
 
+    /// The tooltip's line for a photo waiting for its disk to go to the trash.
+    private var pendingNote: String? {
+        photo.isPendingTrash ? PendingTrashText.badgeHelp : nil
+    }
+
     /// Under a verdict filter, for a photo the user just sorted out of it.
     private var outsideFilterNote: String? {
         entry.isOutsideFilter
@@ -341,6 +379,7 @@ private struct ThumbnailCell: View {
             photo.mediaKind == .video ? String(localized: "Vidéo") : nil,
             photo.verdictDescription,
             star,
+            photo.isPendingTrash ? PendingTrashText.accessibilityLabel : nil,
             burst?.accessibilityDescription,
             entry.isOutsideFilter ? String(localized: "ne correspond plus au filtre") : nil,
             firstReason,

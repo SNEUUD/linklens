@@ -277,6 +277,23 @@ actor LibraryStore {
         try modelContext.save()
     }
 
+    // MARK: - Pending trash (disk unplugged)
+
+    /// Writes `pendingTrashAt` of these photos, by batches of `batchSize` (one save each). Photos no
+    /// longer in the catalogue are skipped. No file is touched here.
+    func setPendingTrash(_ changes: [PendingTrashChange], batchSize: Int = 500) throws {
+        for start in stride(from: 0, to: changes.count, by: batchSize) {
+            let batch = changes[start..<min(start + batchSize, changes.count)]
+            let dates = Dictionary(batch.map { ($0.photoId, $0.pendingTrashAt) }, uniquingKeysWith: { _, last in last })
+            let ids = Array(dates.keys)
+            for photo in try modelContext.fetch(FetchDescriptor<Photo>(predicate: #Predicate { ids.contains($0.id) })) {
+                // `dates[photo.id]` is a `Date??`: the outer optional says whether the key is there.
+                if let date = dates[photo.id] { photo.pendingTrashAt = date }
+            }
+            try modelContext.save()
+        }
+    }
+
     // MARK: - Photos put in the trash from a gallery
 
     /// When the gallery was last sorted by the AI: a new sorting renumbers the bursts, so « Annuler »
@@ -337,6 +354,12 @@ extension Gallery {
             volumeName: volumeName, volumeUUID: volumeUUID
         )
     }
+}
+
+/// One photo's new value of `Photo.pendingTrashAt` (nil: no longer waiting for the trash).
+struct PendingTrashChange: Sendable, Equatable {
+    var photoId: UUID
+    var pendingTrashAt: Date?
 }
 
 /// What `DetailsBackfiller` has to read in one gallery.

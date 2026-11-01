@@ -217,6 +217,12 @@ struct ViewerFilmstrip: View {
                                     .padding(-1.25)
                             }
                         }
+                        .opacity(photo.isPendingTrash ? PendingTrashStyle.opacity : 1)
+                        .overlay(alignment: .bottomLeading) {
+                            if photo.isPendingTrash {
+                                PendingTrashBadge(size: 16).padding(4)
+                            }
+                        }
                         .overlay(alignment: .topTrailing) {
                             if let burst = entry.burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
                                 Image(systemName: "star.fill")
@@ -291,6 +297,9 @@ struct ViewerFilmstrip: View {
         parts.append(photo.verdictDescription ?? String(localized: "pas encore triée"))
         if let burst = entry.burst, burst.showsStar(isBestOfBurst: photo.isBestOfBurst) {
             parts.append(burst.starDescription)
+        }
+        if photo.isPendingTrash {
+            parts.append(PendingTrashText.accessibilityLabel)
         }
         return parts.joined(separator: ", ")
     }

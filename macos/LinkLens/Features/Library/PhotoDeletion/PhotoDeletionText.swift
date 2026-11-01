@@ -4,19 +4,81 @@ import Foundation
 /// by hand: « 1 photo mise », « 3 photos mises »).
 enum PhotoDeletionText {
     /// Context menu: « Mettre à la corbeille… » (one photo), « Mettre les 3 photos à la corbeille… ».
-    static func trashMenuTitle(count: Int) -> String {
-        count > 1
+    /// `pending`: the disk is unplugged, the photos will only be marked (« Mettre en attente de corbeille… »).
+    static func trashMenuTitle(count: Int, pending: Bool = false) -> String {
+        if pending {
+            return count > 1
+                ? String(localized: "Mettre les \(count) photos en attente de corbeille…")
+                : String(localized: "Mettre en attente de corbeille…")
+        }
+        return count > 1
             ? String(localized: "Mettre les \(count) photos à la corbeille…")
             : String(localized: "Mettre à la corbeille…")
     }
 
     /// « Galerie » menu and « Rejeter » filter: « Mettre les 26 photos rejetées à la corbeille… ».
-    static func rejectedMenuTitle(count: Int) -> String {
-        switch count {
+    static func rejectedMenuTitle(count: Int, pending: Bool = false) -> String {
+        if pending {
+            return switch count {
+            case 0: String(localized: "Mettre les photos rejetées en attente de corbeille…")
+            case 1: String(localized: "Mettre la photo rejetée en attente de corbeille…")
+            default: String(localized: "Mettre les \(count) photos rejetées en attente de corbeille…")
+            }
+        }
+        return switch count {
         case 0: String(localized: "Mettre les photos rejetées à la corbeille…")
         case 1: String(localized: "Mettre la photo rejetée à la corbeille…")
         default: String(localized: "Mettre les \(count) photos rejetées à la corbeille…")
         }
+    }
+
+    // MARK: - Pending trash (disk unplugged)
+
+    /// The marking window's title: « Mettre 12 photos en attente de corbeille ? ».
+    static func pendingTitle(count: Int, kind: PhotoDeletionRequest.Kind) -> String {
+        switch (kind, count) {
+        case (.rejected, 1): String(localized: "Mettre la photo rejetée en attente de corbeille ?")
+        case (.rejected, _): String(localized: "Mettre les \(count) photos rejetées en attente de corbeille ?")
+        case (_, 1): String(localized: "Mettre 1 photo en attente de corbeille ?")
+        case (_, _): String(localized: "Mettre \(count) photos en attente de corbeille ?")
+        }
+    }
+
+    /// The marking window: what happens, and when.
+    static func pendingExplanation(volumeName: String) -> String {
+        String(localized: "Le disque « \(volumeName) » n'est pas branché : aucun fichier n'est touché maintenant. Les fichiers seront mis à la corbeille quand le disque « \(volumeName) » sera rebranché, après votre confirmation.")
+    }
+
+    /// Banner, sidebar and badges: « 26 photos en attente de corbeille ».
+    static func pendingCount(_ count: Int) -> String {
+        count > 1
+            ? String(localized: "\(count) photos en attente de corbeille")
+            : String(localized: "1 photo en attente de corbeille")
+    }
+
+    /// The sidebar, where room is short: « 26 en attente de corbeille ».
+    static func pendingShort(_ count: Int) -> String {
+        String(localized: "\(count) en attente de corbeille")
+    }
+
+    /// The Edit menu: « Annuler Mise en attente de corbeille ».
+    static func undoActionName(markedPending count: Int) -> String {
+        count > 1
+            ? String(localized: "Mise en attente de corbeille de \(count) photos")
+            : String(localized: "Mise en attente de corbeille d'une photo")
+    }
+
+    static func undoActionName(unmarkedPending count: Int) -> String {
+        count > 1
+            ? String(localized: "Retrait de l'attente de \(count) photos")
+            : String(localized: "Retrait de l'attente d'une photo")
+    }
+
+    /// Context menu: « Retirer de l'attente de corbeille », « Retirer les 3 photos de l'attente de corbeille ».
+    static func unmarkMenuTitle(count: Int) -> String {
+        count > 1
+            ? String(localized: "Retirer les \(count) photos de l'attente de corbeille")
+            : String(localized: "Retirer de l'attente de corbeille")
     }
 
     /// The window's title: « Mettre 12 photos à la corbeille ? », « Mettre les 26 photos rejetées à la corbeille ? ».
@@ -26,6 +88,8 @@ enum PhotoDeletionText {
         case (.selection, _): String(localized: "Mettre \(count) photos à la corbeille ?")
         case (.rejected, 1): String(localized: "Mettre la photo rejetée à la corbeille ?")
         case (.rejected, _): String(localized: "Mettre les \(count) photos rejetées à la corbeille ?")
+        case (.pending, 1): String(localized: "Mettre la photo en attente à la corbeille ?")
+        case (.pending, _): String(localized: "Mettre les \(count) photos en attente à la corbeille ?")
         }
     }
 
