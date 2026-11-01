@@ -54,6 +54,8 @@ struct GalleryDetailView: View {
     // `@State` keeps the same loader for the whole life of the view (like `useRef`), one per gallery.
     @State private var loader: ThumbnailLoader
     @State private var revealError: String?
+    /// What is derived from `photos`, computed once per update (see `GalleryPhotos`).
+    @State private var photosCache = GalleryPhotosCache()
     @State private var isExportSheetPresented = false
     /// Where the filter of each gallery is remembered.
     private let filterStore: VerdictFilterStore
@@ -101,7 +103,12 @@ struct GalleryDetailView: View {
         availabilityMonitor.availability(of: gallery.id)
     }
 
+    /// The photos read once for this update: counts, lookups by id, bursts…
+    private var facts: GalleryPhotos { photosCache.value }
+
     var body: some View {
+        // `let _ =` runs a statement inside a view builder: every update starts from the current photos.
+        let _ = photosCache.reset(photos)
         VStack(spacing: 0) {
             // The viewer and the review take the whole window: their own notice replaces the banner.
             if !availability.canUseOriginals, !isFullWindow {
@@ -234,7 +241,7 @@ struct GalleryDetailView: View {
             sorter.undoManager = undoManager
         }
         // Again after a sorting: the bursts are stored on the photos.
-        .onChange(of: photos.map(\.burstInput), initial: true) { _, inputs in
+        .onChange(of: facts.burstInputs, initial: true) { _, inputs in
             browser.setPhotos(inputs)
             reviewSession?.update(inputs)
         }
@@ -370,7 +377,7 @@ struct GalleryDetailView: View {
     /// The button, ⌘R or the menu: resumes the review left half-way, else starts one.
     private func openReview() {
         browser.closeViewer()
-        reviewController.open(galleryId: gallery.id, photos: photos.map(\.burstInput))
+        reviewController.open(galleryId: gallery.id, photos: facts.burstInputs)
     }
 
     /// Escape or « Terminer »: the grid comes back on the last photo shown; the position is kept.
@@ -491,7 +498,7 @@ struct GalleryDetailView: View {
 
     /// The photos waiting for their disk to go to the trash, in display order.
     private var pendingPhotos: [Photo] {
-        photos.filter(\.isPendingTrash)
+        facts.pending
     }
 
     /// « Mettre les 26 photos rejetées à la corbeille… »: nil when no photo is « Rejeter » or it is not possible now.
@@ -499,7 +506,7 @@ struct GalleryDetailView: View {
     private var trashRejectedAction: TrashRejectedAction? {
         let marksPending = marksPending
         let count = marksPending
-            ? photos.filter { $0.verdict == .reject && !$0.isPendingTrash }.count
+            ? facts.rejectedNotPendingCount
             : filterCounts.reject
         guard count > 0, canDeletePhotos else { return nil }
         return TrashRejectedAction(count: count, marksPending: marksPending) { requestTrashRejected() }
@@ -507,8 +514,7 @@ struct GalleryDetailView: View {
 
     /// The confirmation window for these photos (display order kept).
     private func requestTrash(_ photoIds: [UUID]) {
-        let byId = Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let items = photoIds.compactMap { byId[$0]?.trashItem }
+        let items = photoIds.compactMap { facts.byId[$0]?.trashItem }
         photoDeletion.requestDeletion(
             PhotoDeletionRequest(galleryId: gallery.id, galleryName: gallery.name, kind: .selection, items: items),
             undoManager: undoManager
@@ -535,28 +541,26 @@ struct GalleryDetailView: View {
 
     /// The selected photos, in display order (the inspector's summary).
     private var selectedPhotos: [Photo] {
-        let byId = Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let byId = facts.byId
         return browser.orderedSelection.compactMap { byId[$0] }
     }
 
     /// The photo the inspector shows: the selection of the grid, the table or the viewer (for a collapsed
     /// burst, its cover).
     private var selectedPhoto: Photo? {
-        guard let selection = browser.selection else { return nil }
-        return photos.first { $0.id == selection }
+        facts.photo(id: browser.selection)
     }
 
     /// The photo the inspector shows: the one shown by the review while it is open, else the selection.
     private var inspectedPhoto: Photo? {
         guard isReviewOpen else { return selectedPhoto }
-        guard let photoId = reviewSession?.focusedPhotoId else { return nil }
-        return photos.first { $0.id == photoId }
+        return facts.photo(id: reviewSession?.focusedPhotoId)
     }
 
     /// Every photo of the inspected photo's burst, for « 7 photos prises dans la même seconde ».
     private var inspectedBurstMembers: [Photo] {
         guard let number = inspectedPhoto?.burstNumber else { return [] }
-        return photos.filter { $0.burstNumber == number }
+        return facts.burstMembers(of: number)
     }
 
     /// The grid is on screen (the size slider and ⌘+ / ⌘− only apply to it).
@@ -565,7 +569,7 @@ struct GalleryDetailView: View {
     }
 
     private var filterCounts: VerdictFilterCounts {
-        VerdictFilterCounts(photos.map(\.verdict))
+        facts.counts
     }
 
     /// A click on a filter or ⌘1–⌘4: shows it (again) and remembers it for this gallery.
@@ -630,9 +634,9 @@ struct GalleryDetailView: View {
 
     /// « 52 photos · triée par l'IA · ~/Downloads/photos » under the gallery name.
     private var subtitle: Text {
-        let summary = GallerySummary(photos.map(\.summaryItem))
+        let photoCount = facts.photoCount
         let state = gallery.culledAt == nil ? Text("pas encore triée") : Text("triée par l'IA")
-        return Text("^[\(summary.photoCount) photo](inflect: true)") + Text(verbatim: " · ") + state
+        return Text("^[\(photoCount) photo](inflect: true)") + Text(verbatim: " · ") + state
             + Text(verbatim: " · " + abbreviatedPath(gallery.folderPath, home: realHomeDirectory()))
     }
 
@@ -643,7 +647,7 @@ struct GalleryDetailView: View {
         if isReviewOpen, let session = reviewSession {
             ReviewModeView(
                 session: session,
-                photosById: Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
+                photosById: facts.byId,
                 loader: loader,
                 sorter: sorter,
                 availability: availability,
@@ -683,16 +687,19 @@ struct GalleryDetailView: View {
 
     /// Width / height of the thumbnails, the dominant shape of the gallery (`ThumbnailShape`).
     private var cellAspectRatio: CGFloat {
-        ThumbnailShape.cellAspectRatio(sizes: photos.map { ($0.pixelWidth, $0.pixelHeight) })
+        facts.cellAspectRatio
     }
 
     /// The browser's entries with their photos. Right after a save, `photos` can be newer than the
-    /// entries for one update: a photo is then looked up by its id instead of its index.
+    /// entries for one update: a photo is then looked up by its id instead of its index (in the
+    /// dictionary: searching the list for each photo took seconds after a deletion in a big gallery).
     private var rows: [DisplayedPhoto] {
-        browser.entries.compactMap { entry in
-            let photo = photos.indices.contains(entry.photoIndex) && photos[entry.photoIndex].id == entry.photoId
+        let facts = facts
+        let photos = facts.photos
+        return browser.entries.compactMap { entry in
+            let photo = photos.indices.contains(entry.photoIndex) && facts.burstInputs[entry.photoIndex].id == entry.photoId
                 ? photos[entry.photoIndex]
-                : photos.first { $0.id == entry.photoId }
+                : facts.byId[entry.photoId]
             return photo.map { DisplayedPhoto(entry: entry, photo: $0) }
         }
     }
