@@ -547,6 +547,88 @@ struct InterfaceRenderTests {
             .map(\.burstInput)
     }
 
+    // MARK: - Export (F6)
+
+    /// « Exporter… » on the session of September 20 (photos only): no « Vidéos » section.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func exportSheet(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        try await renderExportSheet(library, photos: Self.sortedPhotos(of: library.session), named: "export-feuille",
+                                    height: 520, appearance: appearance)
+    }
+
+    /// The same session with 3 videos of the card: the scopes count them apart, « Format des vidéos » appears.
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func exportSheetWithVideos(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let videos = ["C0001.MP4", "C0002.MP4", "C0003.MP4"].map { name in
+            let photo = Photo(draft: PhotoDraft(
+                file: PhotoFile(url: URL(filePath: "/tmp/\(name)"), relativePath: name, fileSize: 180_000_000),
+                metadata: .unknown, importedAt: .now
+            ))
+            library.container.mainContext.insert(photo)
+            return photo
+        }
+        try await renderExportSheet(library, photos: Self.sortedPhotos(of: library.session) + videos, named: "export-feuille-videos",
+                                    height: 720, appearance: appearance)
+    }
+
+    /// After an export with an AVCHD clip (.MTS) the Mac cannot convert: the pill, then « Détails ».
+    @Test(arguments: WindowRenderer.Appearance.allCases)
+    func exportSummaryWithUnsupportedVideo(appearance: WindowRenderer.Appearance) async throws {
+        let library = try RenderLibrary()
+        let destination = URL(filePath: "/Users/chris/Desktop/Export", directoryHint: .isDirectory)
+        let files = (0..<12).map { destination.appending(path: "DSC0\(4297 + $0).jpg") }
+            + ["C0001.mp4", "C0002.mp4"].map { destination.appending(path: $0) }
+        let clip = "PRIVATE/AVCHD/BDMV/STREAM/00000.MTS"
+        let summary = ExportSummary(
+            galleryId: library.session.id, preset: .webJPEG, destination: destination, exportedFiles: files,
+            failures: [ExportFailure(relativePath: clip, message: VideoConversionError.unsupportedFormat("00000.MTS").errorDescription ?? "")],
+            wasCancelled: false
+        )
+        library.exportController.showSummaryForRenders(summary, finishedAt: .now)
+        try await WindowRenderer.render(
+            library.mainWindow(selecting: library.session),
+            named: "export-resume-video",
+            size: CGSize(width: 1280, height: 800),
+            appearance: appearance
+        )
+        // A popover is its own little window, out of the capture: its content is rendered alone.
+        let activity = Activity.exportFinished(summary, at: .now)
+        try await WindowRenderer.render(
+            ActivityDetailsView(detail: activity.detail ?? "")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(.background),
+            named: "export-resume-video-details",
+            size: CGSize(width: 440, height: 150),
+            appearance: appearance
+        )
+    }
+
+    /// The sheet alone, with its own empty settings: the user's last format choice does not change the render.
+    private func renderExportSheet(
+        _ library: RenderLibrary, photos: [Photo], named name: String, height: CGFloat, appearance: WindowRenderer.Appearance
+    ) async throws {
+        let suite = "LinkLensRenders.export"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        try await WindowRenderer.render(
+            library.withEnvironment(
+                ExportSheet(gallery: library.session, photos: photos, selectedPhotoId: nil)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .background(.background)
+                    .defaultAppStorage(defaults)
+            ),
+            named: name,
+            size: CGSize(width: 540, height: height),
+            appearance: appearance
+        )
+    }
+
+    private static func sortedPhotos(of gallery: Gallery) -> [Photo] {
+        gallery.photos.sorted { ($0.captureDate ?? .distantPast) < ($1.captureDate ?? .distantPast) }
+    }
+
     // MARK: - Deleting a gallery
 
     /// The confirmation window over the session of September 20, the box unticked (as it opens).
