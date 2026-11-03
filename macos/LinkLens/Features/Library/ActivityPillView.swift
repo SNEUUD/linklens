@@ -51,6 +51,7 @@ private struct ActivityRow: View {
     let activity: Activity
     let onCancel: (Activity.Kind) -> Void
     let onRevealExport: () -> Void
+    @State private var isShowingDetails = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -74,6 +75,14 @@ private struct ActivityRow: View {
             .accessibilityAddTraits(.updatesFrequently)
 
             if activity.kind == .exportFinished {
+                // The files that could not be exported, and what to do about them.
+                if let detail = activity.detail {
+                    Button("Détails") { isShowingDetails.toggle() }
+                        .buttonStyle(PillButtonStyle())
+                        .popover(isPresented: $isShowingDetails, arrowEdge: .top) {
+                            ActivityDetailsView(detail: detail)
+                        }
+                }
                 Button("Afficher dans le Finder", action: onRevealExport)
                     .buttonStyle(PillButtonStyle())
                 Button {
@@ -114,6 +123,33 @@ private struct ActivityRow: View {
         case .photoTrash: String(localized: "Arrêter après le fichier en cours. Les photos déjà mises à la corbeille restent annulables (⌘Z).")
         case .exportFinished, .duplicates: String(localized: "Arrêter")
         }
+    }
+}
+
+/// What « Détails » shows after an export with failures: one line per file not exported.
+struct ActivityDetailsView: View {
+    /// One failure per line.
+    let detail: String
+
+    var body: some View {
+        let lines = detail.split(separator: "\n")
+        VStack(alignment: .leading, spacing: 8) {
+            // Not « ^[1 fichier non exporté](inflect: true) »: the inflection reads « exporté » as a verb.
+            Text("Fichiers non exportés (\(lines.count))")
+                .font(.headline)
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Label {
+                    Text(verbatim: String(line))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Palette.review.color)
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 420, alignment: .leading)
+        .textSelection(.enabled)
     }
 }
 

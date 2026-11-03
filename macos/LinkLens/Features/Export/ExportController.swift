@@ -24,7 +24,9 @@ final class ExportController {
     }
 
     /// Asks where to save, then exports in the background.
-    func chooseDestinationAndExport(_ items: [ExportItem], of gallery: Gallery, preset: ExportPreset) {
+    func chooseDestinationAndExport(
+        _ items: [ExportItem], of gallery: Gallery, preset: ExportPreset, videoPreset: VideoExportPreset = .compatible
+    ) {
         guard !isExporting, !items.isEmpty else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -32,7 +34,15 @@ final class ExportController {
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
         panel.prompt = String(localized: "Exporter ici")
-        panel.message = String(localized: "Choisissez le dossier où enregistrer les photos (\(items.count)) en \(String(localized: preset.title)). Les originaux ne sont pas modifiés.")
+        let videoCount = items.filter { $0.kind == .video }.count
+        let photoCount = items.count - videoCount
+        if videoCount == 0 {
+            panel.message = String(localized: "Choisissez le dossier où enregistrer les photos (\(items.count)) en \(String(localized: preset.title)). Les originaux ne sont pas modifiés.")
+        } else if photoCount == 0 {
+            panel.message = String(inflecting: "Choisissez le dossier où enregistrer ^[\(videoCount) vidéo](inflect: true) (« \(String(localized: videoPreset.title)) »). Les originaux ne sont pas modifiés.")
+        } else {
+            panel.message = String(inflecting: "Choisissez le dossier où enregistrer ^[\(photoCount) photo](inflect: true) en \(String(localized: preset.title)) et ^[\(videoCount) vidéo](inflect: true) (« \(String(localized: videoPreset.title)) »). Les originaux ne sont pas modifiés.")
+        }
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         start(ExportRequest(
             galleryId: gallery.id,
@@ -41,7 +51,8 @@ final class ExportController {
             folderBookmark: gallery.folderBookmark,
             items: items,
             preset: preset,
-            destination: destination
+            destination: destination,
+            videoPreset: videoPreset
         ))
     }
 
@@ -52,8 +63,9 @@ final class ExportController {
         startedAt = .now
         task = Task {
             do {
-                summary = try await exporter.export(request) { [weak self] progress in
-                    self?.progress = progress
+                // The task already holds the controller until the export ends: no `weak` needed here.
+                summary = try await exporter.export(request) { progress in
+                    self.progress = progress
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -69,7 +81,7 @@ final class ExportController {
         await task?.value
     }
 
-    /// The photos already written are kept.
+    /// The files already written are kept; the video being written is stopped and removed.
     func cancel() {
         task?.cancel()
     }
@@ -84,6 +96,12 @@ final class ExportController {
     func showProgressForRenders(_ progress: ExportProgress, startedAt: Date) {
         self.progress = progress
         self.startedAt = startedAt
+    }
+
+    /// Interface renders only: shows the result of an export that did not run.
+    func showSummaryForRenders(_ summary: ExportSummary, finishedAt: Date) {
+        self.summary = summary
+        self.finishedAt = finishedAt
     }
     #endif
 

@@ -188,7 +188,7 @@ struct PhotoExporterTests {
         #expect(summary.exportedFiles.map(\.lastPathComponent) == ["good.heic"])
         #expect(Set(summary.failures.map(\.relativePath)) == ["broken.jpg", "clip.mov"])
         #expect(summary.failures.first { $0.relativePath == "clip.mov" }?.message
-            == ExportError.videoNotSupportedYet("clip.mov").errorDescription)
+            == VideoConversionError.unsupportedFormat("clip.mov").errorDescription)
         #expect(try destination.fileNames() == ["good.heic"]) // no temporary file left
     }
 

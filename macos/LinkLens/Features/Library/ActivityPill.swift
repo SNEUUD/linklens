@@ -26,6 +26,8 @@ struct Activity: Identifiable, Equatable, Sendable {
     var completed: Int?
     /// Nil while the amount of work is not known yet: the bar then moves on its own.
     var total: Int?
+    /// Part of the item in progress already done (0…1): a long video moves the bar before it is finished.
+    var currentItemFraction: Double? = nil
     /// When it started (or ended, for a finished export): the most recent one is shown.
     var date: Date
     /// False for a finished export: it is closed, not cancelled.
@@ -46,7 +48,7 @@ struct Activity: Identifiable, Equatable, Sendable {
     /// 0…1, nil while the total is unknown.
     var fraction: Double? {
         guard let completed, let total, total > 0 else { return nil }
-        return min(max(Double(completed) / Double(total), 0), 1)
+        return min(max((Double(completed) + (currentItemFraction ?? 0)) / Double(total), 0), 1)
     }
 
     /// Shown and read by VoiceOver: « Export « JPEG pour le web » · 8 sur 26 ».
@@ -77,15 +79,24 @@ extension Activity {
     static func export(_ progress: ExportProgress, startedAt: Date) -> Activity {
         Activity(
             kind: .export, title: String(localized: "Export « \(String(localized: progress.preset.title)) »"),
-            completed: progress.completed, total: progress.total, date: startedAt
+            completed: progress.completed, total: progress.total, currentItemFraction: progress.currentFileFraction, date: startedAt
         )
     }
 
     static func exportFinished(_ summary: ExportSummary, at date: Date) -> Activity {
-        let count = summary.exportedFiles.count
-        var title = String(inflecting: "Export terminé : ^[\(count) photo](inflect: true) dans « \(summary.destination.lastPathComponent) »")
-        if summary.wasCancelled {
-            title = String(inflecting: "Export annulé : ^[\(count) photo](inflect: true) dans « \(summary.destination.lastPathComponent) »")
+        let videoCount = summary.exportedFiles.filter { MediaKind(relativePath: $0.lastPathComponent) == .video }.count
+        let photoCount = summary.exportedFiles.count - videoCount
+        let folder = summary.destination.lastPathComponent
+        var title: String
+        switch (summary.wasCancelled, videoCount > 0) {
+        case (false, false):
+            title = String(inflecting: "Export terminé : ^[\(photoCount) photo](inflect: true) dans « \(folder) »")
+        case (true, false):
+            title = String(inflecting: "Export annulé : ^[\(photoCount) photo](inflect: true) dans « \(folder) »")
+        case (false, true):
+            title = String(inflecting: "Export terminé : ^[\(photoCount) photo](inflect: true) et ^[\(videoCount) vidéo](inflect: true) dans « \(folder) »")
+        case (true, true):
+            title = String(inflecting: "Export annulé : ^[\(photoCount) photo](inflect: true) et ^[\(videoCount) vidéo](inflect: true) dans « \(folder) »")
         }
         if !summary.failures.isEmpty {
             title += " · " + String(localized: "Échecs : \(summary.failures.count)")

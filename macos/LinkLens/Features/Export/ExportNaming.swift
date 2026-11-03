@@ -7,9 +7,14 @@ enum ExportNaming {
     ///
     /// Compared without case: on a Mac "DSC1.jpg" and "dsc1.JPG" are the same file.
     static func plan(_ relativePaths: [String], fileExtension: String, existingNames: Set<String>) -> [String] {
+        plan(relativePaths.map { ($0, fileExtension) }, existingNames: existingNames)
+    }
+
+    /// The same, each file with its own extension (photos in « .jpg », videos in « .mp4 »).
+    static func plan(_ files: [(relativePath: String, fileExtension: String)], existingNames: Set<String>) -> [String] {
         var taken = Set(existingNames.map { $0.lowercased() })
-        return relativePaths.map { relativePath in
-            let name = freeName(base: baseName(of: relativePath), fileExtension: fileExtension, taken: taken)
+        return files.map { file in
+            let name = freeName(base: baseName(of: file.relativePath), fileExtension: file.fileExtension, taken: taken)
             taken.insert(name.lowercased())
             return name
         }
