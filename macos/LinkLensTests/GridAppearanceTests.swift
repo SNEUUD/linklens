@@ -36,8 +36,11 @@ struct GridAppearanceTests {
     }
 
     @Test func onlyPhotosOfTheCellShapeFillIt() {
-        #expect(ThumbnailShape.fillsCell(photoAspectRatio: 2.0 / 3.0, cellAspectRatio: 2.0 / 3.0))
-        #expect(ThumbnailShape.fillsCell(photoAspectRatio: 534.0 / 800.0, cellAspectRatio: 2.0 / 3.0), "a rounded thumbnail size")
+        // Through `let`s: `#expect(f(x))` on a static function makes the compiler warn about an unused result.
+        let sameShape = ThumbnailShape.fillsCell(photoAspectRatio: 2.0 / 3.0, cellAspectRatio: 2.0 / 3.0)
+        let roundedSize = ThumbnailShape.fillsCell(photoAspectRatio: 534.0 / 800.0, cellAspectRatio: 2.0 / 3.0)
+        #expect(sameShape)
+        #expect(roundedSize, "a rounded thumbnail size")
         let portraitCell: CGFloat = 2.0 / 3.0
         let landscapeInPortrait = ThumbnailShape.fillsCell(photoAspectRatio: 1.5, cellAspectRatio: portraitCell)
         let phoneInCamera = ThumbnailShape.fillsCell(photoAspectRatio: 0.75, cellAspectRatio: portraitCell)
