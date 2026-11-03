@@ -498,6 +498,26 @@
     "Choisissez la carte de l'appareil photo (le disque qui contient le dossier DCIM). Rien ne sera modifié sur la carte." : {
 
     },
+    "Choisissez le dossier où enregistrer ^[%lld photo](inflect: true) en %@ et ^[%lld vidéo](inflect: true) (« %@ »). Les originaux ne sont pas modifiés." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choisissez le dossier où enregistrer ^[%1$lld photo](inflect: true) en %2$@ et ^[%3$lld vidéo](inflect: true) (« %4$@ »). Les originaux ne sont pas modifiés."
+          }
+        }
+      }
+    },
+    "Choisissez le dossier où enregistrer ^[%lld vidéo](inflect: true) (« %@ »). Les originaux ne sont pas modifiés." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choisissez le dossier où enregistrer ^[%1$lld vidéo](inflect: true) (« %2$@ »). Les originaux ne sont pas modifiés."
+          }
+        }
+      }
+    },
     "Choisissez le dossier où enregistrer les photos (%lld) en %@. Les originaux ne sont pas modifiés." : {
 
     },
@@ -525,6 +545,9 @@
           }
         }
       }
+    },
+    "Compatible partout" : {
+
     },
     "Copie et vérification : %lld sur %lld" : {
       "localizations" : {
@@ -647,6 +670,9 @@
     "Déposez un dossier" : {
 
     },
+    "Détails" : {
+
+    },
     "Elle représente sa rafale dans la grille." : {
 
     },
@@ -683,6 +709,9 @@
     "Entourer le sujet trouvé par l'IA" : {
 
     },
+    "Environ deux fois plus léger, pour les appareils récents." : {
+
+    },
     "Espace" : {
 
     },
@@ -702,6 +731,16 @@
         }
       }
     },
+    "Export annulé : ^[%lld photo](inflect: true) et ^[%lld vidéo](inflect: true) dans « %@ »" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Export annulé : ^[%1$lld photo](inflect: true) et ^[%2$lld vidéo](inflect: true) dans « %3$@ »"
+          }
+        }
+      }
+    },
     "Export impossible" : {
 
     },
@@ -715,6 +754,16 @@
         }
       }
     },
+    "Export terminé : ^[%lld photo](inflect: true) et ^[%lld vidéo](inflect: true) dans « %@ »" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Export terminé : ^[%1$lld photo](inflect: true) et ^[%2$lld vidéo](inflect: true) dans « %3$@ »"
+          }
+        }
+      }
+    },
     "Export « %@ »" : {
 
     },
@@ -722,6 +771,9 @@
 
     },
     "Exporter des photos" : {
+
+    },
+    "Exporter des photos et des vidéos" : {
 
     },
     "Exporter ici" : {
@@ -746,6 +798,9 @@
 
     },
     "Fichiers non copiés correctement :" : {
+
+    },
+    "Fichiers non exportés (%lld)" : {
 
     },
     "Fichiers restés sur la carte (format non pris en charge) :" : {
@@ -773,6 +828,12 @@
 
     },
     "Format" : {
+
+    },
+    "Format des photos" : {
+
+    },
+    "Format des vidéos" : {
 
     },
     "Galerie" : {
@@ -874,6 +935,9 @@
     "Impossible de convertir l'image « %@ »." : {
 
     },
+    "Impossible de convertir la vidéo « %@ »." : {
+
+    },
     "Impossible de lire l'image « %@ »." : {
 
     },
@@ -928,9 +992,6 @@
     "L'emplacement « %@ » n'est pas disponible. Choisissez-en un autre." : {
 
     },
-    "L'export des vidéos n'est pas encore disponible (« %@ »)." : {
-
-    },
     "L'export lit les fichiers originaux." : {
 
     },
@@ -968,6 +1029,9 @@
 
     },
     "La photo sélectionnée (%@)" : {
+
+    },
+    "La vidéo sélectionnée (%@)" : {
 
     },
     "Laissée en place" : {
@@ -1145,7 +1209,20 @@
     "Les photos à garder (%lld)" : {
 
     },
+    "Les photos à garder (%lld) et les vidéos (%lld)" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Les photos à garder (%1$lld) et les vidéos (%2$lld)"
+          }
+        }
+      }
+    },
     "Les rafales sont regroupées et la meilleure photo mise en avant. Changez d'avis avec P, U ou X." : {
+
+    },
+    "Les vidéos ne sont pas triées par l'IA : elles partent avec les photos à garder, sauf celles que vous avez rejetées." : {
 
     },
     "Les vidéos ne sont pas triées par l'IA. Triez avec" : {
@@ -1185,6 +1262,12 @@
 
     },
     "Légèrement floue (netteté du sujet %@, parmi les %@ les moins nettes)" : {
+
+    },
+    "MP4, H.264, qualité maximale. Avec « JPEG pour le web », sans position GPS." : {
+
+    },
+    "MP4, HEVC (H.265), qualité maximale. Avec « JPEG pour le web », sans position GPS." : {
 
     },
     "Masquer" : {
@@ -1337,6 +1420,9 @@
     "Ne formatez pas la carte : tous ses fichiers ne sont pas copiés à l'identique." : {
 
     },
+    "Ne pas exporter les vidéos" : {
+
+    },
     "Nette" : {
 
     },
@@ -1472,6 +1558,9 @@
 
     },
     "Pleine résolution, sRGB, qualité 92 %, 300 ppp" : {
+
+    },
+    "Plus léger" : {
 
     },
     "Pour copier les photos de la carte « %@ », cliquez sur « Autoriser » sans changer de dossier. Rien ne sera modifié sur la carte." : {
@@ -1749,6 +1838,9 @@
     "Score esthétique faible (%@)" : {
 
     },
+    "Se lit sur tous les ordinateurs, téléphones et sites." : {
+
+    },
     "Sous-exposée" : {
 
     },
@@ -1878,6 +1970,16 @@
     },
     "Toutes" : {
 
+    },
+    "Toutes (^[%lld photo](inflect: true), ^[%lld vidéo](inflect: true))" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Toutes (^[%1$lld photo](inflect: true), ^[%2$lld vidéo](inflect: true))"
+          }
+        }
+      }
     },
     "Toutes les photos (%lld)" : {
 
@@ -2282,7 +2384,13 @@
     "« %@ » supprimée de LinkLens" : {
 
     },
+    "« %@ » — Format non pris en charge : copiez ce fichier tel quel depuis le Finder." : {
+
+    },
     "· Z ou Échap pour revenir" : {
+
+    },
+    "À exporter" : {
 
     },
     "À revoir" : {
