@@ -107,6 +107,55 @@ struct FolderIndexerTests {
         #expect(try context.fetchCount(FetchDescriptor<Photo>()) == 0)
     }
 
+    // MARK: - Videos
+
+    @Test func videosAreListedNextToThePhotosButNotSorted() async throws {
+        let folder = try TestFolder()
+        defer { folder.remove() }
+        try folder.writeJPEG("DSC00001.JPG", exifDate: "2026:09:20 14:40:57")
+        try await writeTestVideo(in: folder, "C0001.MP4", frames: 30)
+        try folder.writeFile("PRIVATE/AVCHD/BDMV/STREAM/00000.MTS", contents: "AVCHD stream AVFoundation cannot read")
+        let before = try folder.snapshot()
+        let container = try makeInMemoryContainer()
+        let store = LibraryStore(modelContainer: container)
+
+        let result = try await FolderIndexer(store: store).indexFolder(at: folder.url)
+
+        #expect(try folder.snapshot() == before, "nothing copied, moved or changed")
+        let context = ModelContext(container)
+        let gallery = try #require(try context.fetch(FetchDescriptor<Gallery>()).first)
+        #expect(result == .indexed(galleryId: gallery.id, photoCount: 3))
+        #expect(gallery.photoCount == 3 && gallery.videoCount == 2)
+        let photos = try context.fetch(FetchDescriptor<Photo>())
+        let kinds = Dictionary(uniqueKeysWithValues: photos.map { ($0.relativePath, $0.mediaKind) })
+        #expect(kinds == ["DSC00001.JPG": .photo, "C0001.MP4": .video, "PRIVATE/AVCHD/BDMV/STREAM/00000.MTS": .video])
+        let clip = try #require(photos.first { $0.relativePath == "C0001.MP4" })
+        #expect(abs((clip.videoDuration ?? 0) - 1) < 0.1)
+        #expect(clip.pixelWidth == 320 && clip.pixelHeight == 240)
+        let avchd = try #require(photos.first { $0.relativePath.hasSuffix(".MTS") })
+        #expect(avchd.videoDuration == nil, "listed, without what AVFoundation cannot read")
+        // The AI sorts the photos only.
+        #expect(try await store.cullingContents(galleryId: gallery.id).photos.count == 1)
+    }
+
+    @Test func aFolderOfVideosOnlyBecomesAGallery() async throws {
+        let folder = try TestFolder()
+        defer { folder.remove() }
+        try await writeTestVideo(in: folder, "Vacances/IMG_0001.MOV", frames: 10)
+        let container = try makeInMemoryContainer()
+
+        let result = try await FolderIndexer(store: LibraryStore(modelContainer: container)).indexFolder(at: folder.url)
+
+        let gallery = try #require(try ModelContext(container).fetch(FetchDescriptor<Gallery>()).first)
+        #expect(result == .indexed(galleryId: gallery.id, photoCount: 1))
+        #expect(gallery.videoCount == 1)
+    }
+
+    @Test func anEmptyFolderNamesPhotosAndVideos() {
+        let message = LibraryError.noPhotos("Bureau").errorDescription
+        #expect(message == "Aucune photo (JPEG, HEIC, RAW Sony .ARW) ni vidéo (MOV, MP4, MTS) dans le dossier « Bureau ».")
+    }
+
     @Test func unfinishedGalleriesAreRemovedAtLaunch() async throws {
         let container = try makeInMemoryContainer()
         let store = LibraryStore(modelContainer: container)

@@ -4,6 +4,7 @@ import Foundation
 enum LibraryError: LocalizedError, Equatable {
     case folderNotFound(String)
     case accessDenied(String)
+    /// No photo nor video in the folder.
     case noPhotos(String)
     case galleryNotFound
 
@@ -14,7 +15,7 @@ enum LibraryError: LocalizedError, Equatable {
         case .accessDenied(let name):
             String(localized: "LinkLens n'a pas l'autorisation de lire le dossier « \(name) ». Choisissez-le à nouveau.")
         case .noPhotos(let name):
-            String(localized: "Aucune photo JPEG, HEIC ou RAW Sony (.ARW) dans le dossier « \(name) ».")
+            String(localized: "Aucune photo (JPEG, HEIC, RAW Sony .ARW) ni vidéo (MOV, MP4, MTS) dans le dossier « \(name) ».")
         case .galleryNotFound:
             String(localized: "Galerie introuvable.")
         }

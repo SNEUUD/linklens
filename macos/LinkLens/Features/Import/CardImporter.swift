@@ -202,7 +202,7 @@ struct CardImporter: Sendable {
         onProgress: @MainActor @Sendable (CardImportProgress) -> Void
     ) async throws -> CardImportReport {
         var report = report
-        let indexer = FolderIndexer(store: store, batchSize: indexingBatchSize, includeVideos: true)
+        let indexer = FolderIndexer(store: store, batchSize: indexingBatchSize)
         do {
             let result = try await indexer.indexFolder(at: report.sessionFolder) { indexing in
                 onProgress(CardImportProgress(

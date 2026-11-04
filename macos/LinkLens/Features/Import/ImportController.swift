@@ -40,7 +40,7 @@ final class ImportController {
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
         panel.prompt = String(localized: "Indexer")
-        panel.message = String(localized: "Choisissez un dossier de photos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié.")
+        panel.message = String(localized: "Choisissez un dossier de photos et de vidéos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié.")
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         indexFolder(at: folder)
     }
