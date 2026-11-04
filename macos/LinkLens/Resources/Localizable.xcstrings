@@ -377,7 +377,7 @@
     "Aucune photo" : {
 
     },
-    "Aucune photo JPEG, HEIC ou RAW Sony (.ARW) dans le dossier « %@ »." : {
+    "Aucune photo (JPEG, HEIC, RAW Sony .ARW) ni vidéo (MOV, MP4, MTS) dans le dossier « %@ »." : {
 
     },
     "Aucune photo ni vidéo sur la carte « %@ »." : {
@@ -527,7 +527,7 @@
     "Choisissez où ranger vos galeries : un dossier de ce Mac ou d'un disque externe. LinkLens y crée un dossier par année, puis un par séance." : {
 
     },
-    "Choisissez un dossier de photos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié." : {
+    "Choisissez un dossier de photos et de vidéos. Les fichiers restent à leur place : rien n'est copié, déplacé ni modifié." : {
 
     },
     "Choisissez une photo pour voir pourquoi l'IA l'a classée ainsi." : {
